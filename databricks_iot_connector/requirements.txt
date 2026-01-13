@@ -1,0 +1,62 @@
+# Databricks IoT Connector Dependencies
+# Production-ready DMZ deployment
+
+# Core dependencies
+databricks-sdk==0.19.0
+databricks-zerobus-ingest-sdk>=1.0.0  # Official ZeroBus SDK
+pyyaml==6.0.1
+cryptography==42.0.0
+python-dotenv==1.0.0
+
+# Protocol support
+asyncua==1.0.6  # OPC-UA
+aiomqtt==2.0.1  # MQTT
+pymodbus==3.6.4  # Modbus TCP/RTU
+
+# Protobuf support
+protobuf==4.25.1
+grpcio-tools==1.60.0
+
+# Async runtime
+asyncio==3.4.3
+aiofiles==23.2.1
+
+# Data processing
+numpy==1.26.3
+pandas==2.1.4
+
+# Monitoring & Observability
+prometheus-client==0.19.0
+opentelemetry-api==1.22.0
+opentelemetry-sdk==1.22.0
+opentelemetry-exporter-otlp==1.22.0
+
+# HTTP server for health checks
+aiohttp==3.9.1
+aiohttp-cors==0.7.0
+
+# Logging
+python-json-logger==2.0.7
+structlog==24.1.0
+
+# Certificate management
+pyopenssl==23.3.0
+certifi==2023.11.17
+
+# Queue management
+queue==0.2.0
+
+# Testing (optional, for development)
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-cov==4.1.0
+pytest-timeout==2.2.0
+
+# Code quality (optional, for development)
+black==23.12.1
+pylint==3.0.3
+mypy==1.8.0
+bandit==1.7.6
+
+# Type hints
+typing-extensions==4.9.0

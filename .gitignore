@@ -1,0 +1,12 @@
+multi_agent_build_guide.txt
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+dist/
+build/
+*.egg-info/
+.opcua2uc.log
+.opcua2uc.pid
+ot_simulator.log
+venv/
