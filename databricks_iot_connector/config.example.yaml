@@ -3,13 +3,38 @@
 
 # Data sources (OPC-UA, MQTT, Modbus)
 sources:
-  # OPC-UA Example
+  # OPC-UA Example (with OPC UA 10101 Security)
   - name: "plant_opcua"
     endpoint: "opc.tcp://localhost:4840"
     protocol: "opcua"  # Auto-detected from endpoint
     variable_limit: 50
     publishing_interval_ms: 1000
     timeout: 5.0
+
+    # OPC UA Security (OPC UA 10101 compliant)
+    security:
+      # Enable/disable security (set to false for development)
+      enabled: false  # Set to true for production
+
+      # Security policy: Basic256Sha256 (OPC UA 10101 recommended)
+      security_policy: "Basic256Sha256"
+      security_mode: "SignAndEncrypt"  # Sign, SignAndEncrypt
+
+      # Client certificate paths (for mutual TLS)
+      client_cert_path: "certs/opcua/client_cert.pem"
+      client_key_path: "certs/opcua/client_key.pem"
+
+      # Server certificate validation
+      server_cert_path: "certs/opcua/server_cert.pem"  # Specific server cert to trust
+      trust_all_certificates: false  # NEVER use true in production
+
+      # Username/password authentication (optional)
+      username: "admin"
+      password: "${credential:opcua.password}"  # Use credential manager
+
+      # Connection settings
+      timeout: 5.0
+      session_timeout_ms: 60000
 
   # MQTT Example
   - name: "sensors_mqtt"
