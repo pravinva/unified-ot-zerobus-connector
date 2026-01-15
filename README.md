@@ -1,11 +1,11 @@
 ## Databricks IoT Connector (Edge)
 
-A **professional-grade edge connector** supporting **OPC-UA, MQTT, and Modbus** protocols, streaming data to Databricks via Zerobus. Runs as **ONE Docker container** inside a customer's plant network.
+A **professional-grade edge connector** supporting **OPC-UA, MQTT, and Modbus** protocols, streaming data to Databricks via Zerobus. Runs as **ONE Docker container** in the DMZ/edge (Purdue Model Level 3.5), bridging OT and IT networks securely.
 
 ### Key Features
 
 - **Multi-Protocol Support**: OPC-UA, MQTT (TLS), Modbus TCP/RTU
-- **Natural Language Control**: AI-powered operator using Claude Sonnet 4.5 (NEW!)
+- **Natural Language Control**: AI-powered operator using Claude Sonnet 4.5
 - **Automatic Reconnection**: Exponential backoff after network outages
 - **Backpressure Handling**: Configurable queue limits and drop policies
 - **Rate Limiting**: Prevent overwhelming downstream systems
@@ -56,7 +56,7 @@ docker run --rm -p 8080:8080 -p 9090:9090 opcua2uc:dev
 - Configurable scaling and offsets
 - **Endpoint**: `modbus://hostname:port` or `modbusrtu:///dev/ttyUSB0`
 
-See [`PROTOCOLS.md`](PROTOCOLS.md) for detailed configuration guide.
+**Configuration**: Protocol settings are configured in `ot_simulator/config.yaml`. See the inline comments for OPC UA security modes, MQTT TLS settings, and Modbus register mappings.
 
 ### Quick Start Examples
 
@@ -107,7 +107,7 @@ More examples in [`examples/`](examples/) directory.
 - `GET /health/live` - Liveness probe
 - `GET /health/ready` - Readiness probe
 
-### Natural Language Operator (NEW!)
+### Natural Language Operator
 
 Control the simulator using plain English powered by **Claude Sonnet 4.5**:
 
@@ -186,31 +186,60 @@ Example configured target: `manufacturing.iot_data.events_bronze`
 
 ### Architecture
 
+#### Purdue Model Compliant Deployment
+
+The connector respects industrial security architecture (ISA-95/IEC-62443 Purdue Model):
+
 ```
-┌─────────────┐   ┌─────────────┐   ┌─────────────┐
-│   OPC-UA    │   │    MQTT     │   │   Modbus    │
-│   Servers   │   │   Brokers   │   │   Devices   │
-└──────┬──────┘   └──────┬──────┘   └──────┬──────┘
-       │                 │                 │
-       └─────────────────┴─────────────────┘
-                         │
-                    ┌────▼─────┐
-                    │  Edge    │
-                    │Connector │  ← This Project
-                    │Container │
-                    └────┬─────┘
-                         │
-                    ┌────▼──────┐
-                    │  Zerobus  │
-                    │ (gRPC)    │
-                    └────┬──────┘
-                         │
-                    ┌────▼─────────┐
-                    │  Databricks  │
-                    │Unity Catalog │
-                    │    Table     │
-                    └──────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│ Level 5: Enterprise Network (IT)                                │
+│                                                                  │
+│              ┌──────────────────────┐                            │
+│              │   Databricks Cloud   │                            │
+│              │   Unity Catalog      │                            │
+│              │   Delta Tables       │                            │
+│              └──────────▲───────────┘                            │
+└─────────────────────────┼────────────────────────────────────────┘
+                          │ HTTPS/gRPC (TLS)
+┌─────────────────────────┼────────────────────────────────────────┐
+│ Level 3.5: DMZ / Edge (Industrial Firewall)                     │
+│                          │                                       │
+│              ┌───────────▼───────────┐                           │
+│              │  IoT Edge Connector   │  ← This Project          │
+│              │  (Docker Container)   │                           │
+│              │  ┌─────────────────┐  │                           │
+│              │  │ OPC UA Client   │  │                           │
+│              │  │ MQTT Client     │  │                           │
+│              │  │ Modbus Client   │  │                           │
+│              │  └─────────────────┘  │                           │
+│              │  ┌─────────────────┐  │                           │
+│              │  │ Zerobus gRPC    │  │                           │
+│              │  │ Buffering/Queue │  │                           │
+│              │  └─────────────────┘  │                           │
+│              └───────────▲───────────┘                           │
+└─────────────────────────┼────────────────────────────────────────┘
+                          │ One-way diode (data flows UP only)
+┌─────────────────────────┼────────────────────────────────────────┐
+│ Level 2: Control Network (OT - Isolated from IT)                │
+│                          │                                       │
+│    ┌─────────────┐  ┌───▼──────┐  ┌─────────────┐              │
+│    │  OPC UA     │  │  MQTT    │  │  Modbus     │              │
+│    │  Servers    │  │  Broker  │  │  Devices    │              │
+│    │  (PLCs)     │  │ (Sensors)│  │  (RTUs)     │              │
+│    └─────────────┘  └──────────┘  └─────────────┘              │
+│                                                                  │
+│ Level 1: Supervisory Control (SCADA/HMI)                        │
+│ Level 0: Field Devices (Physical Processes)                     │
+└──────────────────────────────────────────────────────────────────┘
 ```
+
+**Security Principles**:
+- Connector deploys in **DMZ** (Level 3.5), NOT inside plant network (Level 0-2)
+- **One-way data flow**: OT → DMZ → Cloud (no commands flow down)
+- **Firewall isolation**: OT network remains isolated from IT/Internet
+- **Read-only OPC UA/MQTT/Modbus subscriptions** (no writes to PLC)
+- **TLS/mTLS**: All cloud communication encrypted
+- **No inbound connections**: Connector initiates all connections
 
 ### Simulator Architecture: How Everything Works
 
@@ -367,12 +396,11 @@ mypy opcua2uc/
 
 ### Troubleshooting
 
-See [`PROTOCOLS.md`](PROTOCOLS.md) for protocol-specific troubleshooting.
-
 **Common Issues**:
 - Connection fails: Check firewall, endpoint, and credentials
 - Events dropped: Increase queue size or rate limits
 - High memory: Reduce queue size or variable/register counts
+- Protocol-specific issues: See inline comments in `ot_simulator/config.yaml`
 - Reconnection loops: Check network stability and reconnection settings
 
 ### Contributing
