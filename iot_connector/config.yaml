@@ -16,8 +16,14 @@ monitoring:
     enabled: true
     port: 9090
 
-# No pre-configured sources - use Web UI for discovery
-sources: []
+# Pre-configured OPC-UA source for testing
+sources:
+  - name: "ot_data_simulator_-_opc_ua"
+    protocol: "opcua"
+    endpoint: "opc.tcp://172.17.0.1:4840"
+    security_mode: "None"
+    security_policy: "None"
+    subscription_interval: 1000
 
 # DISABLE Zerobus for testing - just collect data, don't send
 zerobus:
@@ -52,6 +58,6 @@ credentials:
 
 # Logging
 logging:
-  level: INFO
+  level: DEBUG
   format: text
   output: stdout

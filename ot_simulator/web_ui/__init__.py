@@ -13,6 +13,7 @@ from ot_simulator.web_ui.api_handlers import APIHandlers
 from ot_simulator.web_ui.opcua_browser import OPCUABrowser
 from ot_simulator.web_ui.wot_browser import handle_wot_browser
 from ot_simulator.web_ui.templates import get_main_page_html
+from ot_simulator.training_api import TrainingAPIHandler
 
 if TYPE_CHECKING:
     from ot_simulator.simulator_manager import SimulatorManager
@@ -38,6 +39,7 @@ class EnhancedWebUI:
         # Initialize modular components
         self.api_handlers = APIHandlers(config, simulator_manager)
         self.opcua_browser = OPCUABrowser(config, simulator_manager)
+        self.training_api = TrainingAPIHandler(simulator_manager)
 
         # Setup routes
         self._setup_routes()
@@ -61,6 +63,9 @@ class EnhancedWebUI:
         self.app.router.add_post("/api/zerobus/start", self.api_handlers.handle_zerobus_start)
         self.app.router.add_post("/api/zerobus/stop", self.api_handlers.handle_zerobus_stop)
         self.app.router.add_get("/api/zerobus/status", self.api_handlers.handle_zerobus_status)
+
+        # Training API endpoints
+        self.training_api.register_routes(self.app)
 
     async def handle_index(self, request: web.Request) -> web.Response:
         """Serve enhanced professional UI with real-time charts and NLP."""

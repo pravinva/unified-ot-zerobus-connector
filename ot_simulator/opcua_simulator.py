@@ -300,8 +300,17 @@ class OPCUASimulator:
                 logger.warning(f"Could not register to discovery server: {e}")
                 logger.info("Server will still be accessible via direct endpoint connection")
 
+            # Log once that update loop started
+            logger.info(f"Starting sensor value update loop (2 Hz) for {len(self.simulators)} sensors...")
+
             try:
+                iteration_count = 0
                 while self._running:
+                    iteration_count += 1
+                    # Log every 100 iterations (every 50 seconds at 2 Hz)
+                    if iteration_count % 100 == 0:
+                        logger.debug(f"Update loop iteration {iteration_count}, updating {len(self.simulators)} sensors")
+
                     # Update all sensors (with PLC metadata if enabled)
                     for path, simulator in self.simulators.items():
                         # Get value through PLC layer if available

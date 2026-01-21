@@ -14,6 +14,8 @@ services:
       - "1885:1883"
       # Modbus TCP
       - "5022:5020"
+      # Web UI with Training API
+      - "8991:8989"
     networks:
       ot-sim-network-3:
         ipv4_address: 172.27.0.10

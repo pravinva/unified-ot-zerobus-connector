@@ -136,6 +136,10 @@ class WebGUI:
         self.app.router.add_get('/api/zerobus/diagnostics', self.handle_zerobus_diagnostics)
         self.app.router.add_get('/api/zerobus/diagnostics/raw', self.handle_zerobus_diagnostics_raw)
 
+        # ZeroBus control
+        self.app.router.add_post('/api/zerobus/start', self.handle_start_zerobus)
+        self.app.router.add_post('/api/zerobus/stop', self.handle_stop_zerobus)
+
         # Normalization endpoints
         self.app.router.add_get('/api/normalization/status', self.handle_get_normalization_status)
         self.app.router.add_post('/api/normalization/toggle', self.handle_toggle_normalization)
@@ -506,21 +510,27 @@ class WebGUI:
             if 'sources' not in self.config:
                 self.config['sources'] = []
 
-            # Check if source already exists
-            existing = [s for s in self.config['sources'] if s.get('name') == source_name]
-            if existing:
-                return web.json_response({
-                    'success': False,
-                    'error': f'Source "{source_name}" already exists'
-                }, status=409)
+            # Check if source already exists - if so, update it
+            existing_idx = None
+            for idx, s in enumerate(self.config['sources']):
+                if s.get('name') == source_name:
+                    existing_idx = idx
+                    break
 
-            # Add new source
             new_source = {
                 'name': source_name,
                 'type': source_type,
                 **source_config
             }
-            self.config['sources'].append(new_source)
+
+            if existing_idx is not None:
+                # Update existing source
+                self.config['sources'][existing_idx] = new_source
+                logger.info(f"Updated existing source: {source_name}")
+            else:
+                # Add new source
+                self.config['sources'].append(new_source)
+                logger.info(f"Added new source: {source_name}")
 
             # Save configuration
             self.config_loader.save_config(self.config)
@@ -554,8 +564,8 @@ class WebGUI:
             # Build response with credentials
             response_config = {
                 'enabled': zerobus_config.get('enabled', False),
-                'workspace_url': zerobus_config.get('workspace_url', ''),
-                'endpoint': zerobus_config.get('endpoint', ''),
+                'workspace_url': zerobus_config.get('workspace_host', ''),
+                'endpoint': zerobus_config.get('zerobus_endpoint', ''),
                 'target_table': zerobus_config.get('target_table', ''),
                 'source_id': zerobus_config.get('source_id', ''),
                 'debug': zerobus_config.get('debug', False),
@@ -580,8 +590,9 @@ class WebGUI:
                 self.config['zerobus'] = {}
 
             self.config['zerobus']['enabled'] = data.get('enabled', True)
-            self.config['zerobus']['workspace_url'] = data.get('workspace_url', '')
-            self.config['zerobus']['endpoint'] = data.get('endpoint', '')
+            # Save with correct field names that ZeroBus client expects
+            self.config['zerobus']['workspace_host'] = data.get('workspace_url', '')
+            self.config['zerobus']['zerobus_endpoint'] = data.get('endpoint', '')
             self.config['zerobus']['target_table'] = data.get('target_table', '')
             self.config['zerobus']['source_id'] = data.get('source_id', '')
             self.config['zerobus']['debug'] = data.get('debug', False)
@@ -807,6 +818,26 @@ Metrics:
         except Exception as e:
             logger.error(f"ZeroBus raw diagnostics error: {e}")
             return web.Response(text=f"Error: {str(e)}", status=500)
+
+    async def handle_start_zerobus(self, request: web.Request) -> web.Response:
+        """Start ZeroBus streaming."""
+        try:
+            result = await self.bridge.start_zerobus()
+            status_code = 200 if result['status'] == 'ok' else 500
+            return web.json_response(result, status=status_code)
+        except Exception as e:
+            logger.error(f"Error starting ZeroBus: {e}")
+            return web.json_response({'status': 'error', 'message': str(e)}, status=500)
+
+    async def handle_stop_zerobus(self, request: web.Request) -> web.Response:
+        """Stop ZeroBus streaming."""
+        try:
+            result = await self.bridge.stop_zerobus()
+            status_code = 200 if result['status'] == 'ok' else 500
+            return web.json_response(result, status=status_code)
+        except Exception as e:
+            logger.error(f"Error stopping ZeroBus: {e}")
+            return web.json_response({'status': 'error', 'message': str(e)}, status=500)
 
     async def handle_health(self, request: web.Request) -> web.Response:
         """Health check endpoint."""
@@ -1151,6 +1182,16 @@ Metrics:
             border-color: #94A3B8;
         }
 
+        .btn-danger {
+            background: #EF4444;
+            color: white;
+            border: none;
+        }
+
+        .btn-danger:hover {
+            background: #DC2626;
+        }
+
         /* Diagnostics */
         .diagnostics-output {
             background: rgba(0, 0, 0, 0.3);
@@ -1268,6 +1309,7 @@ Metrics:
                         <span style="color: #EF4444; font-size: 14px; font-weight: 500;" id="zerobus-status-text">Disconnected</span>
                     </div>
                     <div style="display: flex; gap: 12px;">
+                        <button class="btn btn-primary" id="zerobus-streaming-toggle" onclick="toggleZeroBusStreaming()" style="padding: 8px 16px; font-size: 13px;">Start Streaming</button>
                         <button class="btn btn-secondary" onclick="showZeroBusDiagnostics()" style="padding: 8px 16px; font-size: 13px;">Diagnostics</button>
                         <button class="btn btn-secondary" onclick="refreshZeroBusStatus()" style="padding: 8px 16px; font-size: 13px;">Refresh</button>
                     </div>
@@ -1793,18 +1835,62 @@ Metrics:
 
                 const indicator = document.getElementById('zerobus-status-indicator');
                 const text = document.getElementById('zerobus-status-text');
+                const toggleBtn = document.getElementById('zerobus-streaming-toggle');
 
                 if (status.connected) {
                     indicator.style.background = '#10B981';
                     text.style.color = '#10B981';
                     text.textContent = 'Connected';
+                    toggleBtn.textContent = 'Stop Streaming';
+                    toggleBtn.classList.remove('btn-primary');
+                    toggleBtn.classList.add('btn-danger');
                 } else {
                     indicator.style.background = '#EF4444';
                     text.style.color = '#EF4444';
                     text.textContent = 'Disconnected';
+                    toggleBtn.textContent = 'Start Streaming';
+                    toggleBtn.classList.remove('btn-danger');
+                    toggleBtn.classList.add('btn-primary');
                 }
             } catch (error) {
                 console.error('Failed to refresh status:', error);
+            }
+        }
+
+        async function toggleZeroBusStreaming() {
+            const toggleBtn = document.getElementById('zerobus-streaming-toggle');
+            const originalText = toggleBtn.textContent;
+
+            try {
+                // Get current status to determine action
+                const statusResp = await fetch('/api/zerobus/status');
+                const status = await statusResp.json();
+
+                const action = status.connected ? 'stop' : 'start';
+                toggleBtn.disabled = true;
+                toggleBtn.textContent = action === 'start' ? 'Starting...' : 'Stopping...';
+
+                // Call start or stop API
+                const response = await fetch(`/api/zerobus/${action}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'}
+                });
+
+                const result = await response.json();
+
+                if (result.status === 'ok') {
+                    console.log('SUCCESS:', result.message || `ZeroBus ${action}ed successfully`);
+                    await refreshZeroBusStatus();
+                } else {
+                    console.error('ERROR:', result.message || `Failed to ${action} ZeroBus`);
+                    toggleBtn.textContent = originalText;
+                }
+            } catch (error) {
+                console.error(`Failed to toggle ZeroBus:`, error);
+                console.error('ERROR:', `Failed to toggle ZeroBus: ${error.message}`);
+                toggleBtn.textContent = originalText;
+            } finally {
+                toggleBtn.disabled = false;
             }
         }
 

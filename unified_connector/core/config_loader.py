@@ -1,0 +1,156 @@
+"""Configuration loader with credential injection support.
+
+Loads configuration from YAML files and injects credentials from secure storage.
+"""
+
+import logging
+import yaml
+from pathlib import Path
+from typing import Any, Dict, Optional
+
+from unified_connector.core.credential_manager import CredentialManager
+
+logger = logging.getLogger(__name__)
+
+
+class ConfigLoader:
+    """Configuration loader with credential injection."""
+
+    def __init__(
+        self,
+        config_path: Optional[Path] = None,
+        credential_manager: Optional[CredentialManager] = None
+    ):
+        """Initialize config loader.
+
+        Args:
+            config_path: Path to config.yaml (default: unified_connector/config/config.yaml)
+            credential_manager: Credential manager instance (default: create new)
+        """
+        if config_path is None:
+            # Default to config.yaml in package
+            config_path = Path(__file__).parent.parent / "config" / "config.yaml"
+
+        self.config_path = Path(config_path)
+
+        if credential_manager is None:
+            credential_manager = CredentialManager()
+
+        self.credential_manager = credential_manager
+
+    def load(self) -> Dict[str, Any]:
+        """Load configuration from YAML file with credential injection.
+
+        Returns:
+            Configuration dictionary with credentials injected
+        """
+        if not self.config_path.exists():
+            raise FileNotFoundError(f"Config file not found: {self.config_path}")
+
+        # Load YAML
+        with open(self.config_path, 'r') as f:
+            config = yaml.safe_load(f)
+
+        if not config:
+            raise ValueError(f"Empty configuration file: {self.config_path}")
+
+        # Inject credentials
+        config = self._inject_credentials(config)
+
+        logger.info(f"Loaded configuration from {self.config_path}")
+        return config
+
+    def _inject_credentials(self, config: Any) -> Any:
+        """Recursively inject credentials from secure storage.
+
+        Replaces placeholders like '${credential:zerobus.client_secret}' with actual values.
+
+        Args:
+            config: Configuration value (dict, list, str, etc.)
+
+        Returns:
+            Configuration with credentials injected
+        """
+        if isinstance(config, dict):
+            return {
+                k: self._inject_credentials(v)
+                for k, v in config.items()
+            }
+        elif isinstance(config, list):
+            return [self._inject_credentials(item) for item in config]
+        elif isinstance(config, str) and config.startswith('${credential:') and config.endswith('}'):
+            # Extract credential key
+            key = config[13:-1]  # Remove '${credential:' and '}'
+
+            # Get credential
+            value = self.credential_manager.get_credential(key)
+
+            if value is None:
+                logger.warning(f"Credential not found: {key}")
+                return ""  # Return empty string if not found
+
+            return value
+        else:
+            return config
+
+    def save(self, config: Dict[str, Any], save_path: Optional[Path] = None) -> bool:
+        """Save configuration to YAML file.
+
+        Args:
+            config: Configuration dictionary
+            save_path: Path to save (default: self.config_path)
+
+        Returns:
+            True if successful, False otherwise
+        """
+        if save_path is None:
+            save_path = self.config_path
+
+        try:
+            # Create parent directory if it doesn't exist
+            save_path.parent.mkdir(parents=True, exist_ok=True)
+
+            # Save YAML
+            with open(save_path, 'w') as f:
+                yaml.safe_dump(config, f, default_flow_style=False, sort_keys=False)
+
+            logger.info(f"Saved configuration to {save_path}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to save configuration: {e}")
+            return False
+
+    def update_sources(self, sources: list[Dict[str, Any]]) -> bool:
+        """Update sources in configuration.
+
+        Args:
+            sources: List of source configurations
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            config = self.load()
+            config['sources'] = sources
+            return self.save(config)
+        except Exception as e:
+            logger.error(f"Failed to update sources: {e}")
+            return False
+
+    def update_zerobus_config(self, zerobus_config: Dict[str, Any]) -> bool:
+        """Update ZeroBus configuration.
+
+        Args:
+            zerobus_config: ZeroBus configuration dict
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            config = self.load()
+            config['zerobus'] = {**config.get('zerobus', {}), **zerobus_config}
+            return self.save(config)
+        except Exception as e:
+            logger.error(f"Failed to update ZeroBus config: {e}")
+            return False

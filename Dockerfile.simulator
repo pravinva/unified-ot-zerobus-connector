@@ -19,8 +19,8 @@ COPY README.md /app/README.md
 RUN useradd -m otsim && chown -R otsim:otsim /app
 USER otsim
 
-# Expose ports for OPC UA, MQTT, Modbus TCP
-EXPOSE 4840 1883 5020
+# Expose ports for OPC UA, MQTT, Modbus TCP, and Web UI
+EXPOSE 4840 1883 5020 8989
 
-# Run simulator with all protocols
-CMD ["python", "-m", "ot_simulator", "--protocol", "all"]
+# Run simulator with all protocols and web UI
+CMD ["python", "-m", "ot_simulator", "--protocol", "all", "--web-ui"]

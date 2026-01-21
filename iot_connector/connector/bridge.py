@@ -327,35 +327,27 @@ class UnifiedBridge:
         Returns:
             Protobuf message instance or JSON dict (fallback)
         """
-        if self._protobuf_descriptor:
-            # Create protobuf message
-            # This requires the compiled protobuf classes
-            # For now, return dict (JSON mode)
-            # TODO: Implement protobuf serialization once schemas are compiled
-            return {
-                'event_time_us': record['event_time_ms'] * 1000,  # Convert ms to us
-                'source_name': record['source_name'],
-                'endpoint': record['endpoint'],
-                'protocol_type': record['protocol_type'],
-                'topic_or_path': record['topic_or_path'],
-                'value': str(record['value']),
-                'value_type': record['value_type'],
-                'value_num': record.get('value_num'),
-                'status': record['status'],
-            }
-        else:
-            # JSON mode (fallback)
-            return {
-                'event_time_us': record['event_time_ms'] * 1000,
-                'source_name': record['source_name'],
-                'endpoint': record['endpoint'],
-                'protocol_type': record['protocol_type'],
-                'topic_or_path': record['topic_or_path'],
-                'value': str(record['value']),
-                'value_type': record['value_type'],
-                'value_num': record.get('value_num'),
-                'status': record['status'],
-            }
+        # Map to Databricks table schema
+        event_time_us = record['event_time_ms'] * 1000  # Convert ms to us
+
+        return {
+            'event_time': event_time_us,
+            'ingest_time': int(time.time() * 1_000_000),  # Current time in microseconds
+            'source_name': record['source_name'],
+            'endpoint': record['endpoint'],
+            'namespace': record.get('namespace', 0),
+            'node_id': record.get('node_id', ''),
+            'browse_path': record.get('topic_or_path', ''),
+            'status_code': record.get('status_code', 0),
+            'status': record['status'],
+            'value_type': record['value_type'],
+            'value': str(record['value']),
+            'value_num': record.get('value_num'),
+            'raw': None,  # Binary data not yet supported
+            'plc_name': record.get('plc_name', ''),
+            'plc_vendor': record.get('plc_vendor', ''),
+            'plc_model': record.get('plc_model', ''),
+        }
 
     async def stop(self):
         """Stop all components gracefully."""
@@ -485,6 +477,91 @@ class UnifiedBridge:
         self.sources = [s for s in self.sources if s.get('name') != source_name]
 
         logger.info(f"✓ Source '{source_name}' removed successfully")
+
+    async def start_zerobus(self) -> Dict[str, Any]:
+        """
+        Start ZeroBus streaming dynamically.
+
+        Returns:
+            dict: Status message with success/error
+        """
+        try:
+            # Check if already connected
+            if self.zerobus.get_connection_status()['connected']:
+                return {'status': 'ok', 'message': 'ZeroBus already connected'}
+
+            # Reload configuration from disk to get latest saved values
+            logger.info("Reloading configuration...")
+            from .config_loader import ConfigLoader
+            config_loader = ConfigLoader(self.config.get('config_path', 'config'))
+            fresh_config = config_loader.load()
+
+            # Update self.config with fresh zerobus settings
+            if 'zerobus' in fresh_config:
+                self.config['zerobus'] = fresh_config['zerobus']
+                logger.info(f"Loaded ZeroBus config: workspace={fresh_config['zerobus'].get('workspace_host', 'N/A')}, table={fresh_config['zerobus'].get('target_table', 'N/A')}")
+
+            # Reinitialize ZeroBusClient with fresh config
+            from .zerobus_client import ZeroBusClient
+
+            self.zerobus = ZeroBusClient(self.config)
+            logger.info("ZeroBusClient reinitialized with fresh configuration")
+
+            # Connect to ZeroBus
+            logger.info("Starting ZeroBus connection...")
+            await self.zerobus.connect(self._protobuf_descriptor)
+
+            # Start batch processor if not already running
+            if self._batch_task is None or self._batch_task.done():
+                self._batch_task = asyncio.create_task(self._batch_processor())
+                logger.info("Batch processor started")
+
+            # Update config to mark as enabled
+            self.config.setdefault('zerobus', {})['enabled'] = True
+
+            logger.info("✓ ZeroBus streaming started successfully")
+            return {'status': 'ok', 'message': 'ZeroBus streaming started successfully'}
+
+        except Exception as e:
+            logger.error(f"Failed to start ZeroBus: {e}", exc_info=True)
+            return {'status': 'error', 'message': f'Failed to start ZeroBus: {str(e)}'}
+
+    async def stop_zerobus(self) -> Dict[str, Any]:
+        """
+        Stop ZeroBus streaming dynamically.
+
+        Returns:
+            dict: Status message with success/error
+        """
+        try:
+            # Check if already disconnected
+            if not self.zerobus.get_connection_status()['connected']:
+                return {'status': 'ok', 'message': 'ZeroBus already disconnected'}
+
+            logger.info("Stopping ZeroBus connection...")
+
+            # Stop batch processor
+            if self._batch_task and not self._batch_task.done():
+                self._batch_task.cancel()
+                try:
+                    await self._batch_task
+                except asyncio.CancelledError:
+                    pass
+                self._batch_task = None
+                logger.info("Batch processor stopped")
+
+            # Close ZeroBus connection
+            await self.zerobus.close()
+
+            # Update config to mark as disabled
+            self.config.setdefault('zerobus', {})['enabled'] = False
+
+            logger.info("✓ ZeroBus streaming stopped successfully")
+            return {'status': 'ok', 'message': 'ZeroBus streaming stopped successfully'}
+
+        except Exception as e:
+            logger.error(f"Failed to stop ZeroBus: {e}", exc_info=True)
+            return {'status': 'error', 'message': f'Failed to stop ZeroBus: {str(e)}'}
 
     def get_status(self) -> Dict[str, Any]:
         """Get current status of all components."""

@@ -1,0 +1,158 @@
+# Unified OT/IoT Connector Configuration
+# Enterprise-grade connector for OPC-UA, MQTT, and Modbus to Databricks
+
+# Connector Settings
+connector:
+  name: "Unified OT/IoT Connector"
+  log_level: "INFO"
+  log_file: "unified_connector.log"
+
+# Web UI Configuration
+web_ui:
+  enabled: true
+  host: "0.0.0.0"
+  port: 8080
+  auto_open_browser: false
+
+# Protocol Discovery Settings
+discovery:
+  enabled: true
+  # Network scan settings for auto-discovery
+  network:
+    scan_enabled: true
+    scan_interval_sec: 300  # Re-scan every 5 minutes
+    subnets:
+      - "192.168.0.0/24"
+      - "172.17.0.0/24"  # Docker default network
+
+  # Protocol-specific discovery
+  opcua:
+    enabled: true
+    default_port: 4840
+    timeout_sec: 5.0
+
+  mqtt:
+    enabled: true
+    default_port: 1883
+    default_tls_port: 8883
+    timeout_sec: 3.0
+
+  modbus:
+    enabled: true
+    default_tcp_port: 502
+    alt_tcp_port: 5020  # Non-privileged port
+    timeout_sec: 2.0
+
+# Protocol Sources (configured via Web UI or manually)
+sources: []
+  # Example:
+  # - name: "plant_opcua_server"
+  #   protocol: "opcua"
+  #   endpoint: "opc.tcp://192.168.1.100:4840"
+  #   enabled: true
+  #   security_mode: "None"
+  #   normalization_enabled: true
+
+# Tag Normalization Configuration
+normalization:
+  enabled: true
+  # ISA-95 / Purdue Model hierarchy
+  path_template: "{site}/{area}/{line}/{equipment}/{signal_type}/{tag_name}"
+
+  # Default context (can be overridden per source)
+  default_context:
+    site: "plant1"
+    area: "production"
+    line: "line1"
+    equipment: "default"
+
+  # Quality mapping
+  quality_mapping:
+    opcua:
+      good: [0]  # Status code 0 = Good
+      uncertain: [64, 65, 66]  # Uncertain quality
+      bad: [128, 129, 130]  # Bad quality
+
+    mqtt:
+      good: ["online", "connected"]
+      bad: ["offline", "disconnected"]
+
+    modbus:
+      good: [0]  # Successful read
+      bad: [1, 2, 3, 4]  # Exception codes
+
+# ZeroBus Configuration (per-source targets)
+# Each source can stream to different Databricks tables
+zerobus:
+  enabled: false  # Start disabled, enable via Web UI
+
+  # Default target (used if source doesn't specify)
+  default_target:
+    workspace_host: ""  # e.g., https://adb-xxx.azuredatabricks.net
+    catalog: "main"
+    schema: "iot_data"
+    table: "sensor_readings"
+
+  # Authentication (OAuth2 M2M)
+  auth:
+    client_id: ""  # Set via Web UI (encrypted)
+    client_secret: ""  # Set via Web UI (encrypted)
+
+  # Batch settings
+  batch:
+    max_records: 1000
+    timeout_seconds: 5.0
+
+  # Per-source targets (example)
+  source_targets: {}
+    # Example:
+    # plant_opcua_server:
+    #   catalog: "manufacturing"
+    #   schema: "plant1"
+    #   table: "opcua_data"
+
+# Backpressure Management
+backpressure:
+  max_queue_size: 50000
+  drop_policy: "oldest"  # oldest, newest, reject
+
+  # Disk spooling for resilience
+  disk_spool:
+    enabled: true
+    directory: "./spool"
+    max_size_mb: 500
+    compression: "gzip"
+
+# Credential Encryption
+credentials:
+  storage:
+    type: "encrypted"  # encrypted, env, none
+    file: "~/.unified_connector/credentials.enc"
+
+  # Master password via environment variable
+  # Set: export CONNECTOR_MASTER_PASSWORD=<password>
+
+# Monitoring & Metrics
+monitoring:
+  # Health check endpoint
+  health_check:
+    enabled: true
+    port: 8081
+
+  # Prometheus metrics
+  prometheus:
+    enabled: true
+    port: 9090
+    path: "/metrics"
+
+  # Statistics
+  stats:
+    enabled: true
+    update_interval_seconds: 10
+
+# Performance Tuning
+performance:
+  max_concurrent_connections: 100
+  connection_pool_size: 20
+  read_buffer_size: 8192
+  write_buffer_size: 8192

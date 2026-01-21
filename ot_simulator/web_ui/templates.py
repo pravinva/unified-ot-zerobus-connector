@@ -5,6 +5,8 @@ This module contains all the front-end templates separated from the backend logi
 
 from __future__ import annotations
 
+from ot_simulator.web_ui.training_ui import get_training_ui_html
+
 
 def get_head_html() -> str:
     """Return the HTML head section with meta tags and external resources."""
@@ -1812,6 +1814,17 @@ def get_body_html() -> str:
                         <div id="modbus-diagnostics" class="diagnostics-panel"></div>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- Training Platform -->
+        <div class="card" style="margin-bottom: 24px;">
+            <div class="card-title" style="cursor: pointer; display: flex; align-items: center; justify-content: space-between;" onclick="toggleTrainingPanel()">
+                <span>🎯 Training Platform</span>
+                <span id="training-toggle-icon" style="transition: transform 0.3s;">▼</span>
+            </div>
+            <div class="training-panel" id="training-panel" style="display: none; margin-top: 20px;">
+""" + get_training_ui_html() + """
             </div>
         </div>
 
@@ -3718,6 +3731,20 @@ def get_scripts_html() -> str:
             } else {
                 panel.classList.add('expanded');
                 icon.classList.add('expanded');
+            }
+        }
+
+        // Training Platform Toggle Function
+        function toggleTrainingPanel() {
+            const panel = document.getElementById('training-panel');
+            const icon = document.getElementById('training-toggle-icon');
+
+            if (panel.style.display === 'none') {
+                panel.style.display = 'block';
+                icon.style.transform = 'rotate(180deg)';
+            } else {
+                panel.style.display = 'none';
+                icon.style.transform = 'rotate(0deg)';
             }
         }
 
