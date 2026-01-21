@@ -6,9 +6,9 @@ from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from connector.normalizer.tag_schema import NormalizedTag, TagQuality, TagDataType
-from connector.normalizer.quality_mapper import QualityMapper
-from connector.normalizer.path_builder import TagPathBuilder
+from unified_connector.normalizer.tag_schema import NormalizedTag, TagQuality, TagDataType
+from unified_connector.normalizer.quality_mapper import QualityMapper
+from unified_connector.normalizer.path_builder import TagPathBuilder
 
 logger = logging.getLogger(__name__)
 

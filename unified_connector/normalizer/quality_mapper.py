@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from connector.normalizer.tag_schema import TagQuality
+from unified_connector.normalizer.tag_schema import TagQuality
 
 logger = logging.getLogger(__name__)
 

@@ -6,10 +6,10 @@ import yaml
 from pathlib import Path
 from typing import Any, Optional
 
-from connector.normalizer.opcua_normalizer import OPCUANormalizer
-from connector.normalizer.modbus_normalizer import ModbusNormalizer
-from connector.normalizer.mqtt_normalizer import MQTTNormalizer
-from connector.normalizer.base_normalizer import BaseNormalizer
+from unified_connector.normalizer.opcua_normalizer import OPCUANormalizer
+from unified_connector.normalizer.modbus_normalizer import ModbusNormalizer
+from unified_connector.normalizer.mqtt_normalizer import MQTTNormalizer
+from unified_connector.normalizer.base_normalizer import BaseNormalizer
 
 logger = logging.getLogger(__name__)
 

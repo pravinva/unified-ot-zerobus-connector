@@ -3,10 +3,10 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from connector.protocols.base import ProtocolClient, ProtocolRecord, ProtocolType
-from connector.protocols.mqtt_client import MQTTClient
-from connector.protocols.modbus_client import ModbusClient
-from connector.protocols.opcua_client import OPCUAClient
+from unified_connector.protocols.base import ProtocolClient, ProtocolRecord, ProtocolType
+from unified_connector.protocols.mqtt_client import MQTTClient
+from unified_connector.protocols.modbus_client import ModbusClient
+from unified_connector.protocols.opcua_client import OPCUAClient
 
 
 def create_protocol_client(

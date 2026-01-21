@@ -1,5 +1,5 @@
 """Protocol implementations for industrial IoT connectors."""
-from connector.protocols.base import (
+from unified_connector.protocols.base import (
     ConnectionStatus,
     ProtocolClient,
     ProtocolRecord,

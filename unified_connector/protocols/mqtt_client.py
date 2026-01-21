@@ -11,7 +11,7 @@ try:
 except ImportError:
     aiomqtt = None  # type: ignore
 
-from connector.protocols.base import (
+from unified_connector.protocols.base import (
     ProtocolClient,
     ProtocolRecord,
     ProtocolTestResult,
@@ -62,7 +62,7 @@ class MQTTClient(ProtocolClient):
         self._normalizer = None
         if self._normalization_enabled:
             try:
-                from connector.normalizer import get_normalization_manager
+                from unified_connector.normalizer import get_normalization_manager
                 self._norm_manager = get_normalization_manager()
                 if self._norm_manager.is_enabled():
                     self._normalizer = self._norm_manager.get_normalizer("mqtt")

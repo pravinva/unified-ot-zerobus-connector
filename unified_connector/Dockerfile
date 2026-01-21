@@ -45,6 +45,10 @@ COPY --chown=connector:connector . /app/
 RUN mkdir -p /data/spool /data/logs && \
     chown -R connector:connector /data
 
+# Create credentials directory with proper permissions
+RUN mkdir -p /home/connector/.unified_connector && \
+    chown -R connector:connector /home/connector/.unified_connector
+
 # Switch to non-root user
 USER connector
 

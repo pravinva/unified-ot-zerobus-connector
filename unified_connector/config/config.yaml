@@ -44,14 +44,16 @@ discovery:
     timeout_sec: 2.0
 
 # Protocol Sources (configured via Web UI or manually)
-sources: []
-  # Example:
-  # - name: "plant_opcua_server"
-  #   protocol: "opcua"
-  #   endpoint: "opc.tcp://192.168.1.100:4840"
-  #   enabled: true
-  #   security_mode: "None"
-  #   normalization_enabled: true
+sources:
+  - name: "ot-simulator-opcua"
+    protocol: "opcua"
+    endpoint: "opc.tcp://localhost:4840"
+    enabled: true
+    security_mode: "None"
+    normalization_enabled: false
+    polling_mode: true
+    polling_interval_ms: 1000
+    subscription_mode: false
 
 # Tag Normalization Configuration
 normalization:
@@ -84,19 +86,23 @@ normalization:
 # ZeroBus Configuration (per-source targets)
 # Each source can stream to different Databricks tables
 zerobus:
-  enabled: false  # Start disabled, enable via Web UI
+  enabled: true  # Enabled with host networking
+
+  # Databricks workspace and ZeroBus endpoint
+  workspace_host: "https://e2-demo-field-eng.cloud.databricks.com"
+  zerobus_endpoint: "1444828305810485.zerobus.us-west-2.cloud.databricks.com"
 
   # Default target (used if source doesn't specify)
   default_target:
-    workspace_host: ""  # e.g., https://adb-xxx.azuredatabricks.net
-    catalog: "main"
-    schema: "iot_data"
-    table: "sensor_readings"
+    workspace_host: "https://e2-demo-field-eng.cloud.databricks.com"
+    catalog: "opcua"
+    schema: "scada_data"
+    table: "opcua_events_bronze"
 
-  # Authentication (OAuth2 M2M)
+  # Authentication (OAuth2 M2M) - credentials loaded from encrypted storage
   auth:
-    client_id: ""  # Set via Web UI (encrypted)
-    client_secret: ""  # Set via Web UI (encrypted)
+    client_id: "${credential:zerobus.client_id}"
+    client_secret: "${credential:zerobus.client_secret}"
 
   # Batch settings
   batch:

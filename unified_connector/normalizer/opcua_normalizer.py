@@ -5,8 +5,8 @@ import logging
 import re
 from typing import Any
 
-from connector.normalizer.base_normalizer import BaseNormalizer
-from connector.normalizer.tag_schema import NormalizedTag, TagQuality
+from unified_connector.normalizer.base_normalizer import BaseNormalizer
+from unified_connector.normalizer.tag_schema import NormalizedTag, TagQuality
 
 logger = logging.getLogger(__name__)
 

@@ -16,13 +16,13 @@ from typing import Any, Callable
 from asyncua import Client, Node
 from asyncua.ua import DataChangeNotification, Variant
 
-from connector.protocols.base import (
+from unified_connector.protocols.base import (
     ProtocolClient,
     ProtocolRecord,
     ProtocolTestResult,
     ProtocolType,
 )
-from connector.protocols.opcua_security import (
+from unified_connector.protocols.opcua_security import (
     OPCUASecurityConfig,
     OPCUASecurityManager,
     create_security_config_from_dict,
@@ -70,7 +70,7 @@ class OPCUAClient(ProtocolClient):
         self._normalizer = None
         if self._normalization_enabled:
             try:
-                from connector.normalizer import get_normalization_manager
+                from unified_connector.normalizer import get_normalization_manager
                 self._norm_manager = get_normalization_manager()
                 if self._norm_manager.is_enabled():
                     self._normalizer = self._norm_manager.get_normalizer("opcua")
@@ -190,12 +190,14 @@ class OPCUAClient(ProtocolClient):
             # POLLING MODE: Actively read all values at regular intervals
             # This bypasses deadband filtering issues
             logger.info(f"🔄 Starting POLLING MODE with {len(self._variables)} variables at {self.polling_interval_ms}ms intervals")
-            await self._poll_loop()
+            # Start poll loop in background
+            self._poll_task = asyncio.create_task(self._poll_loop())
         else:
             # SUBSCRIPTION MODE: Use OPC-UA data-change notifications
             # Note: May be affected by server deadband filtering
             logger.info(f"🔔 Starting SUBSCRIPTION MODE with {len(self._variables)} variables")
-            await self._subscription_loop()
+            # Start subscription loop in background
+            self._subscription_task = asyncio.create_task(self._subscription_loop())
 
     async def _poll_loop(self) -> None:
         """Poll all variables at regular intervals."""
@@ -204,6 +206,7 @@ class OPCUAClient(ProtocolClient):
         poll_count = 0
         while not self._stop_evt.is_set():
             poll_start = time.time()
+            records_sent = 0
 
             # Read all variables in batch
             for var_node in self._variables:
@@ -221,26 +224,29 @@ class OPCUAClient(ProtocolClient):
 
                     # Create record
                     record = ProtocolRecord(
-                        timestamp=int(time.time() * 1000000),  # microseconds
+                        event_time_ms=int(time.time() * 1000),  # milliseconds
                         source_name=self.source_name,
+                        endpoint=self.endpoint,
                         protocol_type=self.protocol_type,
-                        tag_id=node_id,
-                        tag_name=tag_name,
-                        value=data_value if isinstance(data_value, (int, float, str, bool)) else str(data_value),
-                        quality="good",
-                        metadata={}
+                        topic_or_path=tag_name,
+                        value=data_value,
+                        value_type=type(data_value).__name__,
+                        value_num=float(data_value) if isinstance(data_value, (int, float)) else None,
+                        status="Good",
+                        metadata={"node_id": node_id, "tag_name": tag_name}
                     )
 
                     # Send to callback
-                    self._on_record(record)
+                    self.on_record(record)
+                    records_sent += 1
 
                 except Exception as e:
-                    logger.debug(f"Failed to read {var_node.nodeid}: {e}")
+                    logger.warning(f"Failed to read {var_node.nodeid}: {e}")
                     continue
 
             poll_count += 1
             if poll_count % 10 == 0:  # Log every 10 polls
-                logger.debug(f"Poll #{poll_count}: Read {len(self._variables)} variables")
+                logger.info(f"Poll #{poll_count}: Sent {records_sent} records (total variables: {len(self._variables)})")
 
             # Calculate sleep time to maintain polling interval
             poll_duration = (time.time() - poll_start) * 1000  # ms

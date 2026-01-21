@@ -62,7 +62,7 @@ class UnifiedBridge:
         # Initialize normalizer if enabled
         if self.normalization_enabled:
             self.norm_manager = get_normalization_manager()
-            self.norm_manager.configure(self.normalization_config)
+            self.norm_manager.set_enabled(True)
             logger.info("Tag normalization enabled")
         else:
             self.norm_manager = None
@@ -170,6 +170,7 @@ class UnifiedBridge:
                     'zerobus': {
                         'enabled': True,
                         'workspace_host': target_config['workspace_host'],
+                        'zerobus_endpoint': self.zerobus_config.get('zerobus_endpoint'),
                         'target': {
                             'catalog': target_config.get('catalog', 'main'),
                             'schema': target_config.get('schema', 'iot_data'),
@@ -326,36 +327,27 @@ class UnifiedBridge:
         """
         self.metrics['records_received'] += 1
 
-        # Convert to dict
-        record_dict = {
-            'timestamp': record.timestamp,
-            'source_name': record.source_name,
-            'protocol_type': record.protocol_type.value,
-            'tag_id': record.tag_id,
-            'tag_name': record.tag_name,
-            'value': record.value,
-            'quality': record.quality,
-            'metadata': record.metadata,
-        }
+        # Convert to dict using the record's to_dict method
+        record_dict = record.to_dict()
 
-        # Apply normalization if enabled
-        if self.normalization_enabled and self.norm_manager:
-            try:
-                normalizer = self.norm_manager.get_normalizer(record.protocol_type.value)
-                if normalizer:
-                    # Create raw data format expected by normalizer
-                    raw_data = self._protocol_record_to_raw_data(record)
-                    normalized_tag = normalizer.normalize(raw_data)
-
-                    # Update record with normalized values
-                    record_dict['tag_path'] = normalized_tag.tag_path
-                    record_dict['tag_id'] = normalized_tag.tag_id
-                    record_dict['data_type'] = normalized_tag.data_type.value
-                    record_dict['quality'] = normalized_tag.quality.value
-
-                    self.metrics['records_normalized'] += 1
-            except Exception as e:
-                logger.warning(f"Normalization failed for {record.tag_name}: {e}")
+        # Apply normalization if enabled (skip for now - schema mismatch)
+        # if self.normalization_enabled and self.norm_manager:
+        #     try:
+        #         normalizer = self.norm_manager.get_normalizer(record.protocol_type.value)
+        #         if normalizer:
+        #             # Create raw data format expected by normalizer
+        #             raw_data = self._protocol_record_to_raw_data(record)
+        #             normalized_tag = normalizer.normalize(raw_data)
+        #
+        #             # Update record with normalized values
+        #             record_dict['tag_path'] = normalized_tag.tag_path
+        #             record_dict['tag_id'] = normalized_tag.tag_id
+        #             record_dict['data_type'] = normalized_tag.data_type.value
+        #             record_dict['quality'] = normalized_tag.quality.value
+        #
+        #             self.metrics['records_normalized'] += 1
+        #     except Exception as e:
+        #         logger.warning(f"Normalization failed: {e}")
 
         # Enqueue for ZeroBus
         asyncio.create_task(self._enqueue_record(record_dict))

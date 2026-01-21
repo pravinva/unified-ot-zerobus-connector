@@ -34,10 +34,7 @@ services:
       context: .
       dockerfile: unified_connector/Dockerfile
     container_name: unified-connector
-    ports:
-      - "8080:8080"    # Web UI
-      - "8081:8081"    # Health check
-      - "9090:9090"    # Prometheus metrics
+    network_mode: "host"
     environment:
       - PYTHONUNBUFFERED=1
       - CONNECTOR_LOG_LEVEL=INFO
@@ -50,8 +47,6 @@ services:
       - ./unified_connector/config:/app/config
       - connector_data:/data
       - connector_credentials:/home/connector/.unified_connector
-    networks:
-      - iot_network
     depends_on:
       - ot_simulator
     restart: unless-stopped
