@@ -40,7 +40,15 @@ class CredentialManager:
             credentials_dir = Path.home() / ".unified_connector"
 
         self.credentials_dir = Path(credentials_dir)
-        self.credentials_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            self.credentials_dir.mkdir(parents=True, exist_ok=True)
+        except PermissionError as e:
+            fallback_dir = Path.cwd() / ".unified_connector"
+            logger.warning(
+                f"Cannot access credentials dir {self.credentials_dir} ({e}). Falling back to {fallback_dir}."
+            )
+            self.credentials_dir = fallback_dir
+            self.credentials_dir.mkdir(parents=True, exist_ok=True)
 
         # Credentials file
         self.credentials_file = self.credentials_dir / "credentials.enc"
@@ -62,18 +70,36 @@ class CredentialManager:
         """Load existing salt or generate new one."""
         salt_file = self.credentials_dir / "salt.txt"
 
-        if salt_file.exists():
-            with open(salt_file, 'r') as f:
-                self._salt = base64.b64decode(f.read().strip())
-            logger.debug("Loaded existing salt")
-        else:
+        try:
+            if salt_file.exists():
+                with open(salt_file, 'r') as f:
+                    self._salt = base64.b64decode(f.read().strip())
+                logger.debug("Loaded existing salt")
+                return
+
             # Generate new random salt
             self._salt = os.urandom(16)
             with open(salt_file, 'w') as f:
                 f.write(base64.b64encode(self._salt).decode('utf-8'))
+
             # Secure permissions
             salt_file.chmod(0o600)
             logger.info("Generated new salt for credential encryption")
+
+        except PermissionError as e:
+            fallback_dir = Path.cwd() / ".unified_connector"
+            if self.credentials_dir.resolve() != fallback_dir.resolve():
+                logger.warning(
+                    f"Permission error accessing {salt_file} ({e}). Falling back to {fallback_dir}."
+                )
+                self.credentials_dir = fallback_dir
+                self.credentials_dir.mkdir(parents=True, exist_ok=True)
+                self.credentials_file = self.credentials_dir / "credentials.enc"
+                # Retry once in fallback dir
+                self._load_or_create_salt()
+                return
+            raise
+
 
     def _get_cipher(self) -> Optional[Fernet]:
         """Get or create Fernet cipher with PBKDF2 key derivation."""

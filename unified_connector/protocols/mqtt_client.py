@@ -123,8 +123,9 @@ class MQTTClient(ProtocolClient):
             username=self.username,
             password=self.password,
             identifier=self.client_id,
+            clean_session=self.clean_session,
+            protocol=aiomqtt.ProtocolVersion.V311,
             tls_params=tls_params,
-            clean_start=self.clean_session,
             keepalive=self.keepalive,
         )
 

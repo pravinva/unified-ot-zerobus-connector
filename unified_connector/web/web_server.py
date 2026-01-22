@@ -10,6 +10,7 @@ Provides REST API and web interface for:
 import asyncio
 import json
 import logging
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 from aiohttp import web
@@ -44,6 +45,8 @@ class WebServer:
         """Start web server."""
         self.app = web.Application()
 
+        static_dir = Path(__file__).parent / "static"
+
         # Setup CORS
         cors = aiohttp_cors.setup(self.app, defaults={
             "*": aiohttp_cors.ResourceOptions(
@@ -67,11 +70,19 @@ class WebServer:
             web.delete('/api/sources/{name}', self.remove_source),
             web.put('/api/sources/{name}', self.update_source),
 
+            web.post('/api/sources/{name}/start', self.start_source),
+            web.post('/api/sources/{name}/stop', self.stop_source),
+
+            # Bridge control
+            web.post('/api/bridge/start', self.start_bridge),
+            web.post('/api/bridge/stop', self.stop_bridge),
+
             # ZeroBus
             web.get('/api/zerobus/config', self.get_zerobus_config),
             web.post('/api/zerobus/config', self.update_zerobus_config),
             web.post('/api/zerobus/start', self.start_zerobus),
             web.post('/api/zerobus/stop', self.stop_zerobus),
+            web.get('/api/zerobus/diagnostics', self.get_zerobus_diagnostics),
 
             # Monitoring
             web.get('/api/metrics', self.get_metrics),
@@ -87,6 +98,10 @@ class WebServer:
         for route in routes:
             resource = self.app.router.add_route(route.method, route.path, route.handler)
             cors.add(resource)
+
+        # Static assets for Web UI
+        if static_dir.exists():
+            self.app.router.add_static('/static/', path=str(static_dir), name='static')
 
         # Start server
         self.runner = web.AppRunner(self.app)
@@ -107,7 +122,16 @@ class WebServer:
     async def get_discovered_servers(self, request: web.Request) -> web.Response:
         """Get list of discovered protocol servers."""
         protocol = request.query.get('protocol')
-        servers = self.discovery.get_discovered_servers(protocol=protocol)
+
+        proto_enum = None
+        if protocol:
+            try:
+                from unified_connector.core.discovery import ProtocolType
+                proto_enum = ProtocolType(protocol)
+            except Exception:
+                proto_enum = None
+
+        servers = self.discovery.get_discovered_servers(protocol=proto_enum)
 
         return web.json_response({
             'servers': [s.to_dict() for s in servers],
@@ -136,7 +160,13 @@ class WebServer:
                     status=400
                 )
 
-            result = await self.discovery.test_server_connection(protocol, host, port)
+            try:
+                from unified_connector.core.discovery import ProtocolType
+                protocol_enum = ProtocolType(str(protocol))
+            except Exception:
+                return web.json_response({"status": "error", "message": f"Unknown protocol: {protocol}"}, status=400)
+
+            result = await self.discovery.test_server_connection(protocol_enum, host, port)
             return web.json_response(result)
 
         except Exception as e:
@@ -232,6 +262,29 @@ class WebServer:
             logger.error(f"Failed to update source: {e}", exc_info=True)
             return web.json_response({'status': 'error', 'message': str(e)}, status=500)
 
+
+
+    async def start_source(self, request: web.Request) -> web.Response:
+        """Start a single configured source."""
+        try:
+            name = request.match_info['name']
+            res = await self.bridge.start_source(name)
+            return web.json_response(res, status=200 if res.get('status') == 'ok' else 500)
+        except Exception as e:
+            logger.error(f"Failed to start source: {e}", exc_info=True)
+            return web.json_response({'status': 'error', 'message': str(e)}, status=500)
+
+    async def stop_source(self, request: web.Request) -> web.Response:
+        """Stop a single active source."""
+        try:
+            name = request.match_info['name']
+            res = await self.bridge.stop_source(name)
+            return web.json_response(res, status=200 if res.get('status') == 'ok' else 500)
+        except Exception as e:
+            logger.error(f"Failed to stop source: {e}", exc_info=True)
+            return web.json_response({'status': 'error', 'message': str(e)}, status=500)
+
+
     async def get_zerobus_config(self, request: web.Request) -> web.Response:
         """Get ZeroBus configuration."""
         zerobus_config = self.config.get('zerobus', {})
@@ -245,6 +298,145 @@ class WebServer:
             }
 
         return web.json_response(safe_config)
+
+
+    async def get_zerobus_diagnostics(self, request: web.Request) -> web.Response:
+        """Return ZeroBus config diagnostics (no node metrics)."""
+        import os
+        import socket
+        from urllib.parse import urlparse
+
+        deep = request.query.get('deep', '').lower() in ('1', 'true', 'yes')
+
+        cfg = self.config.get('zerobus', {})
+        default_target = cfg.get('default_target', {}) or {}
+        auth = cfg.get('auth', {}) or {}
+
+        workspace_host = cfg.get('workspace_host') or default_target.get('workspace_host')
+        zerobus_endpoint = cfg.get('zerobus_endpoint')
+
+        table = {
+            'catalog': default_target.get('catalog'),
+            'schema': default_target.get('schema'),
+            'table': default_target.get('table'),
+        }
+
+        def _has_value(v: object) -> bool:
+            return isinstance(v, str) and bool(v.strip())
+
+        result: dict[str, object] = {
+            'enabled': bool(cfg.get('enabled', False)),
+            'workspace_host': workspace_host or '',
+            'zerobus_endpoint': zerobus_endpoint or '',
+            'target_table': table,
+            'auth': {
+                'client_id_present': _has_value(auth.get('client_id')),
+                'client_secret_present': _has_value(auth.get('client_secret')),
+            },
+            'master_password_set': bool(os.getenv('CONNECTOR_MASTER_PASSWORD')),
+            'checks': {},
+        }
+
+        async def _dns_check(host: str) -> dict[str, object]:
+            loop = asyncio.get_running_loop()
+            try:
+                addrs = await asyncio.wait_for(
+                    loop.getaddrinfo(host, 443, type=socket.SOCK_STREAM),
+                    timeout=1.5,
+                )
+                ips = sorted({a[4][0] for a in addrs})[:6]
+                return {'ok': True, 'addresses': ips}
+            except Exception as e:
+                return {'ok': False, 'error': str(e)}
+
+        async def _tcp_check(host: str) -> dict[str, object]:
+            try:
+                reader, writer = await asyncio.wait_for(
+                    asyncio.open_connection(host, 443),
+                    timeout=2.0,
+                )
+                writer.close()
+                await writer.wait_closed()
+                return {'ok': True}
+            except Exception as e:
+                return {'ok': False, 'error': str(e)}
+
+        checks: dict[str, object] = {}
+
+        if _has_value(zerobus_endpoint):
+            dns, tcp = await asyncio.gather(
+                _dns_check(zerobus_endpoint),
+                _tcp_check(zerobus_endpoint),
+            )
+            checks['zerobus_dns_ok'] = dns['ok']
+            if dns.get('addresses'):
+                checks['zerobus_dns_addresses'] = dns['addresses']
+            if dns.get('error'):
+                checks['zerobus_dns_error'] = dns['error']
+
+            checks['zerobus_tcp_443_ok'] = tcp['ok']
+            if tcp.get('error'):
+                checks['zerobus_tcp_443_error'] = tcp['error']
+        else:
+            checks['zerobus_dns_ok'] = False
+            checks['zerobus_tcp_443_ok'] = False
+
+        if _has_value(workspace_host):
+            try:
+                host = urlparse(workspace_host).netloc or workspace_host
+                if ':' in host:
+                    host = host.split(':', 1)[0]
+
+                dns, tcp = await asyncio.gather(
+                    _dns_check(host),
+                    _tcp_check(host),
+                )
+
+                checks['workspace_dns_ok'] = dns['ok']
+                if dns.get('addresses'):
+                    checks['workspace_dns_addresses'] = dns['addresses']
+                if dns.get('error'):
+                    checks['workspace_dns_error'] = dns['error']
+
+                checks['workspace_tcp_443_ok'] = tcp['ok']
+                if tcp.get('error'):
+                    checks['workspace_tcp_443_error'] = tcp['error']
+            except Exception as e:
+                checks['workspace_parse_ok'] = False
+                checks['workspace_parse_error'] = str(e)
+        else:
+            checks['workspace_dns_ok'] = False
+            checks['workspace_tcp_443_ok'] = False
+
+        if deep:
+            try:
+                from unified_connector.core.zerobus_client import ZeroBusClient
+
+                zb_config = {
+                    'zerobus': {
+                        'enabled': True,
+                        'workspace_host': workspace_host,
+                        'zerobus_endpoint': zerobus_endpoint,
+                        'target': table,
+                        'auth': auth,
+                        'batch': cfg.get('batch', {}),
+                        'retry': cfg.get('retry', {}),
+                        'circuit_breaker': cfg.get('circuit_breaker', {}),
+                    }
+                }
+
+                client = ZeroBusClient(zb_config)
+                await asyncio.wait_for(client.connect(protobuf_descriptor=None), timeout=12.0)
+                await client.close()
+                checks['deep_stream_create_ok'] = True
+            except Exception as e:
+                checks['deep_stream_create_ok'] = False
+                checks['deep_stream_create_error'] = str(e)
+
+        result['checks'] = checks
+        return web.json_response(result)
+
+
 
     async def update_zerobus_config(self, request: web.Request) -> web.Response:
         """Update ZeroBus configuration."""
@@ -273,6 +465,32 @@ class WebServer:
         except Exception as e:
             logger.error(f"Failed to update ZeroBus config: {e}", exc_info=True)
             return web.json_response({'status': 'error', 'message': str(e)}, status=500)
+
+
+
+
+
+
+
+
+    async def start_bridge(self, request: web.Request) -> web.Response:
+        """Start protocol sources (bridge) in background."""
+        try:
+            asyncio.create_task(self.bridge.start_infra())
+            return web.json_response({'status': 'ok', 'message': 'Bridge starting'})
+        except Exception as e:
+            logger.error(f"Failed to start bridge: {e}", exc_info=True)
+            return web.json_response({'status': 'error', 'message': str(e)}, status=500)
+
+    async def stop_bridge(self, request: web.Request) -> web.Response:
+        """Stop protocol sources (bridge)."""
+        try:
+            await self.bridge.stop()
+            return web.json_response({'status': 'ok', 'message': 'Bridge stopped'})
+        except Exception as e:
+            logger.error(f"Failed to stop bridge: {e}", exc_info=True)
+            return web.json_response({'status': 'error', 'message': str(e)}, status=500)
+
 
     async def start_zerobus(self, request: web.Request) -> web.Response:
         """Start ZeroBus streaming."""
@@ -305,6 +523,20 @@ class WebServer:
         """Get connector status."""
         try:
             status = self.bridge.get_status()
+
+            # Add discovery stats (discovered servers are *reachable*, not necessarily configured/connected)
+            try:
+                servers = self.discovery.get_discovered_servers()
+                status['discovery_enabled'] = True
+                status['discovery_count'] = len(servers)
+                by_proto = {}
+                for s in servers:
+                    proto = getattr(s, 'protocol', None)
+                    key = proto.value if hasattr(proto, 'value') else str(proto)
+                    by_proto[key] = by_proto.get(key, 0) + 1
+                status['discovery_by_protocol'] = by_proto
+            except Exception:
+                status['discovery_enabled'] = False
             return web.json_response(status)
         except Exception as e:
             logger.error(f"Failed to get status: {e}", exc_info=True)
@@ -320,125 +552,284 @@ class WebServer:
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Unified OT/IoT Connector</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-            background: #f5f5f5;
-        }
-        h1 {
-            color: #333;
-        }
-        .card {
-            background: white;
-            padding: 20px;
-            margin: 10px 0;
-            border-radius: 5px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        button {
-            background: #007bff;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 3px;
-            cursor: pointer;
-        }
-        button:hover {
-            background: #0056b3;
-        }
-        .status {
-            display: inline-block;
-            padding: 5px 10px;
-            border-radius: 3px;
-            font-size: 12px;
-            font-weight: bold;
-        }
-        .status.connected {
-            background: #28a745;
-            color: white;
-        }
-        .status.disconnected {
-            background: #dc3545;
-            color: white;
-        }
-    </style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Unified OT/IoT Connector</title>
+  <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
-    <h1>Unified OT/IoT Connector</h1>
-
-    <div class="card">
-        <h2>Status</h2>
-        <p>Web UI is running.</p>
-        <p>API endpoint: <code>/api</code></p>
+  <div class="container">
+    <div class="topbar">
+      <div class="title">
+        <h1>Unified OT/IoT Connector</h1>
+      </div>
     </div>
 
-    <div class="card">
-        <h2>API Endpoints</h2>
-        <ul>
-            <li><code>GET /api/discovery/servers</code> - List discovered servers</li>
-            <li><code>POST /api/discovery/scan</code> - Trigger discovery scan</li>
-            <li><code>GET /api/sources</code> - List configured sources</li>
-            <li><code>POST /api/sources</code> - Add new source</li>
-            <li><code>GET /api/metrics</code> - Get metrics</li>
-            <li><code>GET /api/status</code> - Get status</li>
-        </ul>
+    <div class="grid">
+      <div class="card collapsible" style="grid-column: 1 / -1">
+        <div class="card-header">
+          <h2>Overview</h2>
+          <div class="hint">High-level health + refresh</div>
+          <button class="iconbtn" type="button" data-toggle="collapse" data-target="#overviewBody" aria-label="Toggle Overview">▾</button>
+        </div>
+        <div id="overviewBody" class="card-body" style="display:none">
+          <div class="pillrow">
+            <div id="badgeDiscovery" class="pill warn"><strong>Discovery: unknown</strong></div>
+            <div id="badgeSources" class="pill warn"><strong>Sources: unknown</strong></div>
+            <div id="badgeZerobus" class="pill warn"><strong>ZeroBus: unknown</strong></div>
+            <button id="btnRefresh" class="btn btn-secondary" type="button">Refresh all</button>
+          </div>
+        </div>
+      </div>
+      <div class="card collapsible" style="grid-column: 1 / -1">
+        <div class="card-header">
+          <h2>Discovery</h2>
+          <div class="hint">Scan and test protocol servers</div>
+          <button class="iconbtn" type="button" data-toggle="collapse" data-target="#discoveryBody" aria-label="Toggle Discovery">▾</button>
+        </div>
+        <div id="discoveryBody" class="card-body" style="display:none">
+          <div class="row" style="justify-content:flex-end">
+            <button id="btnDiscoveryScan" class="btn btn-primary" type="button">Scan</button>
+          </div>
+          <div class="discovery-rows">
+            <div class="discovery-row">
+              <div class="row" style="justify-content: space-between; align-items: baseline">
+                <div class="section-title" style="margin: 0">OPC-UA</div>
+                <div id="discoveryCountOpcua" class="muted">—</div>
+              </div>
+              <table class="table table-compact" style="margin-top: 8px">
+                <thead>
+                  <tr>
+                    <th>Host</th>
+                    <th>Port</th>
+                    <th>Endpoint</th>
+                    <th>Reachable</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="discoveryTbodyOpcua"></tbody>
+              </table>
+            </div>
+
+            <div class="discovery-row">
+              <div class="row" style="justify-content: space-between; align-items: baseline">
+                <div class="section-title" style="margin: 0">MQTT</div>
+                <div id="discoveryCountMqtt" class="muted">—</div>
+              </div>
+              <table class="table table-compact" style="margin-top: 8px">
+                <thead>
+                  <tr>
+                    <th>Host</th>
+                    <th>Port</th>
+                    <th>Endpoint</th>
+                    <th>Reachable</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="discoveryTbodyMqtt"></tbody>
+              </table>
+            </div>
+
+            <div class="discovery-row">
+              <div class="row" style="justify-content: space-between; align-items: baseline">
+                <div class="section-title" style="margin: 0">Modbus</div>
+                <div id="discoveryCountModbus" class="muted">—</div>
+              </div>
+              <table class="table table-compact" style="margin-top: 8px">
+                <thead>
+                  <tr>
+                    <th>Host</th>
+                    <th>Port</th>
+                    <th>Endpoint</th>
+                    <th>Reachable</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="discoveryTbodyModbus"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="section-title">Discovery test result</div>
+          <div id="discoveryTestResult" class="codebox">Click “Test” on a discovered endpoint to see detailed diagnostics here.</div>
+        </div>
+      </div>
+
+      <!-- ZeroBus full width for better editing experience -->
+      <div class="card collapsible" style="grid-column: 1 / -1">
+        <div class="card-header">
+          <h2>ZeroBus</h2>
+          <div class="hint">Roomy config editor (host, endpoint, catalog.schema.table, client id/secret)</div>
+          <button class="iconbtn" type="button" data-toggle="collapse" data-target="#zerobusBody" aria-label="Toggle ZeroBus">▾</button>
+        </div>
+        <div id="zerobusBody" class="card-body" style="display:none">
+          <div class="zerobus-fields split">
+            <label class="full">
+              Workspace host
+              <input id="zbWorkspace" placeholder="https://adb-..." />
+            </label>
+            <label class="full">
+              ZeroBus endpoint
+              <input id="zbZerobusEndpoint" placeholder="<workspaceId>.zerobus.<region>.cloud.databricks.com" />
+            </label>
+
+            <label class="full">
+              Target table (catalog.schema.table)
+              <input id="zbTableFqn" placeholder="main.iot_data.sensor_readings" />
+            </label>
+
+            <label>
+              Client ID
+              <input id="zbClientId" placeholder="<oauth-client-id>" />
+            </label>
+            <label>
+              Client secret
+              <input id="zbClientSecret" type="password" placeholder="(leave blank to keep existing)" />
+              <div id="zbSecretHint" class="muted" style="margin-top:6px"></div>
+            </label>
+
+            <label>
+              Enabled
+              <div class="row" style="gap:8px">
+                <input id="zbEnabled" type="checkbox" style="width:18px;height:18px" />
+                <span class="muted">Allow streaming when started</span>
+              </div>
+            </label>
+
+            <div class="row" style="grid-column: 1 / -1; margin-top: 6px">
+              <button id="btnLoadZerobus" class="btn btn-secondary" type="button">Reload</button>
+              <button id="btnSaveZerobus" class="btn btn-primary" type="button">Save</button>
+              <button id="btnStartZerobus" class="btn btn-good" type="button">Start</button>
+              <button id="btnStopZerobus" class="btn btn-warning" type="button">Stop</button>
+              <button id="btnZerobusDiag" class="btn btn-secondary" type="button">Diagnostics</button>
+                        <div class="section-title">ZeroBus diagnostics</div>
+            <div id="zbDiag" class="codebox">Click “Diagnostics” to run checks.</div>
+</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card collapsible" style="grid-column: 1 / -1"> 
+        <div class="card-header">
+          <h2>Sources</h2>
+          <div class="hint">Add/edit/delete connector sources</div>
+          <button class="iconbtn" type="button" data-toggle="collapse" data-target="#sourcesBody" aria-label="Toggle Sources">▾</button>
+        </div>
+        <div id="sourcesBody" class="card-body" style="display:none">
+          <div class="row" style="justify-content:flex-end; gap:8px">
+            <button id="btnStartBridge" class="btn btn-secondary" type="button">Start bridge</button>
+            <button id="btnStartSelected" class="btn btn-good" type="button">Start selected</button>
+            <button id="btnStopSelected" class="btn btn-warning" type="button">Stop selected</button>
+          </div>
+          <div class="split">
+            <form id="sourceForm">
+              <input id="srcMode" type="hidden" value="create" />
+              <input id="srcOriginalName" type="hidden" value="" />
+
+              <div class="split">
+                <label>Name <input id="srcName" placeholder="plant_opcua_server" required /></label>
+                <label>
+                  Protocol
+                  <select id="srcProtocol">
+                    <option value="opcua">OPC-UA</option>
+                    <option value="mqtt">MQTT</option>
+                    <option value="modbus">Modbus</option>
+                  </select>
+                </label>
+              </div>
+
+              <label>Endpoint <input id="srcEndpoint" placeholder="opc.tcp://192.168.1.100:4840" required /></label>
+
+              <div class="split">
+                <label>Site <input id="srcSite" placeholder="plant1" /></label>
+                <label>Area <input id="srcArea" placeholder="production" /></label>
+              </div>
+              <div class="split">
+                <label>Line <input id="srcLine" placeholder="line1" /></label>
+                <label>Equipment <input id="srcEquipment" placeholder="plc1" /></label>
+              </div>
+
+              <label>
+                <span>Enabled</span>
+                <div class="row" style="gap:8px">
+                  <input id="srcEnabled" type="checkbox" style="width:18px;height:18px" checked />
+                  <span class="muted">Start source when connector runs</span>
+                </div>
+              </label>
+
+              <div class="row" style="margin-top:10px">
+                <button id="srcSubmit" class="btn btn-primary" type="submit">Add source</button>
+                <button id="srcReset" class="btn btn-secondary" type="button">Reset</button>
+              </div>
+
+              <div class="section-title">Notes</div>
+              <div class="muted">Editing a source updates the on-disk config and restarts the source inside the running bridge.</div>
+            </form>
+
+            <div>
+              <div class="subcard">
+                <div class="subcard-header">
+                  <div class="section-title" style="margin: 0">Configured sources</div>
+                  <div class="row" style="gap:8px">
+                    <button id="btnRefreshSources" class="btn btn-secondary" type="button">Refresh</button>
+                    <button class="iconbtn" type="button" data-toggle="collapse" data-target="#configuredSourcesBody" aria-label="Toggle Configured sources">▾</button>
+                  </div>
+                </div>
+                <div id="configuredSourcesBody" class="subcard-body" style="display:none">
+                  <table class="table" style="margin-top: 10px">
+                    <thead>
+                      <tr>
+                        <th style="width:44px"><input id="srcSelectAll" type="checkbox" /></th>
+                        <th>Name</th>
+                        <th>Protocol</th>
+                        <th>Endpoint</th>
+                        <th>Active</th>
+                        <th>Enabled</th>
+                        <th>Action</th>
+                        <th style="width:44px"></th>
+                      </tr>
+                    </thead>
+                    <tbody id="sourcesTbody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card collapsible">
+        <div class="card-header">
+          <h2>Status</h2>
+          <div class="hint">Live connector state</div>
+          <button class="iconbtn" type="button" data-toggle="collapse" data-target="#statusBody" aria-label="Toggle Status">▾</button>
+        </div>
+        <div id="statusBody" class="card-body" style="display:none">
+          <div class="row" style="justify-content: flex-end">
+            <button id="btnRefreshStatus" class="btn btn-secondary" type="button">Refresh</button>
+          </div>
+          <div id="statusKVs" class="kvs"></div>
+        </div>
+      </div>
+
+      <div class="card collapsible">
+        <div class="card-header">
+          <h2>Metrics</h2>
+          <div class="hint">Counters & performance</div>
+          <button class="iconbtn" type="button" data-toggle="collapse" data-target="#metricsBody" aria-label="Toggle Metrics">▾</button>
+        </div>
+        <div id="metricsBody" class="card-body" style="display:none">
+          <div class="row" style="justify-content: flex-end">
+            <button id="btnRefreshMetrics" class="btn btn-secondary" type="button">Refresh</button>
+          </div>
+          <div id="metricsKVs" class="kvs"></div>
+        </div>
+      </div>
     </div>
+  </div>
 
-    <div class="card">
-        <h2>Quick Actions</h2>
-        <button onclick="discoverServers()">Discover Servers</button>
-        <button onclick="getMetrics()">View Metrics</button>
-        <button onclick="getStatus()">View Status</button>
-    </div>
-
-    <div class="card">
-        <h2>Response</h2>
-        <pre id="response" style="background: #f8f9fa; padding: 10px; border-radius: 3px;"></pre>
-    </div>
-
-    <script>
-        async function discoverServers() {
-            try {
-                const response = await fetch('/api/discovery/scan', { method: 'POST' });
-                const data = await response.json();
-                document.getElementById('response').textContent = JSON.stringify(data, null, 2);
-
-                // Wait and fetch discovered servers
-                setTimeout(async () => {
-                    const serversResponse = await fetch('/api/discovery/servers');
-                    const serversData = await serversResponse.json();
-                    document.getElementById('response').textContent = JSON.stringify(serversData, null, 2);
-                }, 2000);
-            } catch (e) {
-                document.getElementById('response').textContent = 'Error: ' + e.message;
-            }
-        }
-
-        async function getMetrics() {
-            try {
-                const response = await fetch('/api/metrics');
-                const data = await response.json();
-                document.getElementById('response').textContent = JSON.stringify(data, null, 2);
-            } catch (e) {
-                document.getElementById('response').textContent = 'Error: ' + e.message;
-            }
-        }
-
-        async function getStatus() {
-            try {
-                const response = await fetch('/api/status');
-                const data = await response.json();
-                document.getElementById('response').textContent = JSON.stringify(data, null, 2);
-            } catch (e) {
-                document.getElementById('response').textContent = 'Error: ' + e.message;
-            }
-        }
-    </script>
+  <div id="toast" class="toast"></div>
+  <script src="/static/app.js"></script>
 </body>
-</html>
-        """
+</html>        """
         return web.Response(text=html, content_type='text/html')

@@ -63,6 +63,7 @@ class OPCUAClient(ProtocolClient):
         self._subscription: Any = None
         self._monitored_items: list[Any] = []
         self._variables: list[Node] = []  # Store discovered variables for polling
+        self._poll_targets: list[tuple[Node, str, str]] = []  # (node, node_id, tag_name)
         self._namespaces: list[str] = []
 
         # Normalization support
@@ -186,6 +187,18 @@ class OPCUAClient(ProtocolClient):
         variables = await self._discover_variables()
         self._variables = variables[:self.variable_limit]
 
+        # Build polling cache (avoid expensive browse_name reads every poll)
+        self._poll_targets = []
+        for var_node in self._variables:
+            node_id = str(var_node.nodeid)
+            tag_name = node_id
+            try:
+                browse_name = await var_node.read_browse_name()
+                tag_name = getattr(browse_name, 'Name', node_id)
+            except Exception:
+                pass
+            self._poll_targets.append((var_node, node_id, tag_name))
+
         if self.polling_mode:
             # POLLING MODE: Actively read all values at regular intervals
             # This bypasses deadband filtering issues
@@ -208,23 +221,30 @@ class OPCUAClient(ProtocolClient):
             poll_start = time.time()
             records_sent = 0
 
-            # Read all variables in batch
-            for var_node in self._variables:
-                try:
-                    # Read current value
-                    data_value = await var_node.read_value()
+            # Read values concurrently in small batches to avoid blocking the event loop
+            batch_size = 25
+            targets = self._poll_targets if self._poll_targets else [(n, str(n.nodeid), str(n.nodeid)) for n in self._variables]
 
-                    # Get node ID and browse name
-                    node_id = str(var_node.nodeid)
+            for i in range(0, len(targets), batch_size):
+                batch = targets[i:i+batch_size]
+
+                async def _read_one(t):
+                    node, node_id, tag_name = t
                     try:
-                        browse_name = await var_node.read_browse_name()
-                        tag_name = browse_name.Name
-                    except:
-                        tag_name = node_id
+                        v = await node.read_value()
+                        return (node_id, tag_name, v, None)
+                    except Exception as e:
+                        return (node_id, tag_name, None, e)
 
-                    # Create record
+                results = await asyncio.gather(*(_read_one(t) for t in batch))
+
+                for node_id, tag_name, data_value, err in results:
+                    if err is not None:
+                        # keep log noise low
+                        continue
+
                     record = ProtocolRecord(
-                        event_time_ms=int(time.time() * 1000),  # milliseconds
+                        event_time_ms=int(time.time() * 1000),
                         source_name=self.source_name,
                         endpoint=self.endpoint,
                         protocol_type=self.protocol_type,
@@ -233,17 +253,13 @@ class OPCUAClient(ProtocolClient):
                         value_type=type(data_value).__name__,
                         value_num=float(data_value) if isinstance(data_value, (int, float)) else None,
                         status="Good",
-                        metadata={"node_id": node_id, "tag_name": tag_name}
+                        metadata={"node_id": node_id, "tag_name": tag_name},
                     )
-
-                    # Send to callback
                     self.on_record(record)
                     records_sent += 1
 
-                except Exception as e:
-                    logger.warning(f"Failed to read {var_node.nodeid}: {e}")
-                    continue
-
+                # Yield to allow web server requests to be handled
+                await asyncio.sleep(0)
             poll_count += 1
             if poll_count % 10 == 0:  # Log every 10 polls
                 logger.info(f"Poll #{poll_count}: Sent {records_sent} records (total variables: {len(self._variables)})")

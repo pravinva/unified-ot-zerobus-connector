@@ -55,6 +55,9 @@ class UnifiedConnector:
         # Shutdown event
         self._shutdown_event = asyncio.Event()
 
+        # Background bridge task (so Web UI can start immediately)
+        self._bridge_task: asyncio.Task | None = None
+
         logger.info("✓ Unified Connector initialized")
 
     async def start(self):
@@ -68,14 +71,17 @@ class UnifiedConnector:
             await self.discovery.start()
             logger.info("✓ Discovery service started")
 
-        # Start bridge
-        await self.bridge.start()
-        logger.info("✓ Bridge started")
-
-        # Start web server
+        # Start web server first (so diagnostics/UI is responsive immediately)
         if self.config.get('web_ui', {}).get('enabled', True):
             await self.web_server.start()
             logger.info("✓ Web UI started")
+
+        # Start bridge in the background (optional)
+        if self.config.get('bridge', {}).get('autostart', True):
+            self._bridge_task = asyncio.create_task(self.bridge.start())
+            logger.info("⏳ Bridge starting in background")
+        else:
+            logger.info("Bridge autostart disabled (web UI / diagnostics mode)")
 
         logger.info("=" * 80)
         logger.info("✓ Unified Connector is running")
@@ -95,7 +101,16 @@ class UnifiedConnector:
         logger.info("Shutting down...")
 
         # Stop bridge first (stop data flow)
+        # If bridge is still starting, cancel start task
+        if self._bridge_task is not None and not self._bridge_task.done():
+            self._bridge_task.cancel()
+            try:
+                await self._bridge_task
+            except Exception:
+                pass
+
         await self.bridge.stop()
+
 
         # Stop discovery
         await self.discovery.stop()

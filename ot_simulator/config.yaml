@@ -17,7 +17,7 @@ web_ui:
 # OPC-UA Server Configuration
 opcua:
   enabled: true
-  endpoint: "opc.tcp://0.0.0.0:4840/ot-simulator/server/"
+  endpoint: "opc.tcp://0.0.0.0:4841/ot-simulator/server/"
   server_name: "OT Data Simulator - OPC UA"
   namespace_uri: "http://databricks.com/iot-simulator"
 

@@ -53,7 +53,10 @@ class UnifiedBridge:
 
         # ZeroBus configuration
         self.zerobus_config = config.get('zerobus', {})
-        self.zerobus_enabled = self.zerobus_config.get('enabled', False)
+        # Config flag (what user configured)
+        self.zerobus_config_enabled = self.zerobus_config.get('enabled', False)
+        # Runtime flag (whether client(s)/batchers are running)
+        self.zerobus_enabled = False
 
         # Tag normalization
         self.normalization_config = config.get('normalization', {})
@@ -102,25 +105,62 @@ class UnifiedBridge:
         }
 
         self._shutdown = False
+        self.running = False
+        self._starting = False
+        self._start_lock = asyncio.Lock()
 
         logger.info(f"UnifiedBridge initialized: {len(self.sources)} sources configured")
 
-    async def start(self):
-        """Start all components."""
-        logger.info("Starting UnifiedBridge...")
+
+
+    async def start_infra(self) -> None:
+        """Start bridge infrastructure (ZeroBus + batch processors) only.
+
+        Does NOT automatically start all configured sources.
+        Use start_source()/stop_source() to control sources individually.
+        """
+        async with self._start_lock:
+            if self.running or self._starting:
+                logger.info("UnifiedBridge already running/starting")
+                return
+            self._starting = True
+            self._shutdown = False
+
+        logger.info("Starting UnifiedBridge infrastructure...")
 
         # Initialize ZeroBus clients if enabled
-        if self.zerobus_enabled:
+        if self.zerobus_config_enabled:
             logger.info("ZeroBus enabled - initializing connections...")
             await self._initialize_zerobus_clients()
+            self.zerobus_enabled = True
         else:
             logger.info("ZeroBus disabled - data collection only mode")
 
-        # Start protocol clients
+        # Start batch processors if ZeroBus enabled
+        if self.zerobus_enabled:
+            for target_id in self.zerobus_clients.keys():
+                if target_id in self.batch_tasks and not self.batch_tasks[target_id].done():
+                    continue
+                task = asyncio.create_task(self._batch_processor(target_id))
+                self.batch_tasks[target_id] = task
+                logger.info(f"Batch processor started for target: {target_id}")
+
+        self.running = True
+        self._starting = False
+        logger.info("✓ UnifiedBridge infrastructure started")
+
+    async def start(self):
+        """Start all components (infra + all enabled sources)."""
+        await self.start_infra()
+
+        # Start protocol clients (enabled sources)
         for source_config in self.sources:
             source_name = source_config.get('name', 'unknown')
             if not source_config.get('enabled', True):
                 logger.info(f"Source '{source_name}' is disabled, skipping")
+                continue
+
+            if source_name in self.clients:
                 continue
 
             try:
@@ -128,14 +168,6 @@ class UnifiedBridge:
                 logger.info(f"✓ Started source: {source_name}")
             except Exception as e:
                 logger.error(f"Failed to start source {source_name}: {e}")
-                # Continue with other sources
-
-        # Start batch processors if ZeroBus enabled
-        if self.zerobus_enabled:
-            for target_id in self.zerobus_clients.keys():
-                task = asyncio.create_task(self._batch_processor(target_id))
-                self.batch_tasks[target_id] = task
-                logger.info(f"Batch processor started for target: {target_id}")
 
         logger.info(f"✓ UnifiedBridge started with {len(self.clients)} active sources")
 
@@ -319,6 +351,57 @@ class UnifiedBridge:
 
         logger.info(f"[{source_name}] Client lifecycle ended")
 
+
+    async def start_source(self, source_name: str) -> Dict[str, Any]:
+        """Start a single configured source (does not modify config)."""
+        if self._shutdown:
+            return {'status': 'error', 'message': 'Bridge is shut down'}
+
+        if source_name in self.clients:
+            return {'status': 'ok', 'message': f"Source already active: {source_name}"}
+
+        cfg = next((s for s in self.sources if s.get('name') == source_name), None)
+        if not cfg:
+            return {'status': 'error', 'message': f"Source not found: {source_name}"}
+
+        if not cfg.get('enabled', True):
+            return {'status': 'error', 'message': f"Source is disabled in config: {source_name}"}
+
+        try:
+            await self._start_client(cfg)
+            logger.info(f"✓ Started source: {source_name}")
+            return {'status': 'ok', 'message': f"Source started: {source_name}"}
+        except Exception as e:
+            logger.error(f"Failed to start source {source_name}: {e}", exc_info=True)
+            return {'status': 'error', 'message': str(e)}
+
+    async def stop_source(self, source_name: str) -> Dict[str, Any]:
+        """Stop a single active source (does not delete it from config)."""
+        if source_name not in self.clients:
+            return {'status': 'ok', 'message': f"Source already stopped: {source_name}"}
+
+        client = self.clients.get(source_name)
+        try:
+            if client is not None:
+                await client.stop()
+                await client.disconnect()
+        except Exception as e:
+            logger.warning(f"Error stopping source {source_name}: {e}")
+
+        if source_name in self.client_tasks:
+            task = self.client_tasks[source_name]
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+            except Exception:
+                pass
+            self.client_tasks.pop(source_name, None)
+
+        self.clients.pop(source_name, None)
+        return {'status': 'ok', 'message': f"Source stopped: {source_name}"}
+
     def _on_record(self, record: ProtocolRecord):
         """Callback when protocol client receives a record.
 
@@ -350,7 +433,15 @@ class UnifiedBridge:
         #         logger.warning(f"Normalization failed: {e}")
 
         # Enqueue for ZeroBus
-        asyncio.create_task(self._enqueue_record(record_dict))
+        # Fast-path: avoid creating a task per record (can starve the event loop).
+        try:
+            self.backpressure.memory_queue.put_nowait(record_dict)
+            self.backpressure.metrics['records_enqueued'] += 1
+            self.backpressure.metrics['current_queue_depth'] = self.backpressure.memory_queue.qsize()
+            self.metrics['records_enqueued'] += 1
+        except asyncio.QueueFull:
+            # Slow-path: fall back to async enqueue (disk spooling / drop policy)
+            asyncio.create_task(self._enqueue_record(record_dict))
 
     def _protocol_record_to_raw_data(self, record: ProtocolRecord) -> Dict[str, Any]:
         """Convert ProtocolRecord to raw data format for normalizers.
@@ -420,6 +511,10 @@ class UnifiedBridge:
                         message = self._to_zerobus_message(record)
                         batch.append(message)
 
+                    else:
+                        # Nothing to send; avoid a hot loop that starves the web UI
+                        await asyncio.sleep(0.1)
+
                 except asyncio.TimeoutError:
                     pass
 
@@ -453,36 +548,69 @@ class UnifiedBridge:
 
         logger.info(f"Batch processor stopped for {target_id}")
 
+
     def _to_zerobus_message(self, record: Dict[str, Any]) -> Dict[str, Any]:
-        """Convert internal record format to ZeroBus message.
+        """Convert internal record dict to the UC OPC-UA bronze schema."""
+        import re
 
-        Args:
-            record: Internal record dict
+        metadata = record.get('metadata') or {}
 
-        Returns:
-            ZeroBus message dict
-        """
-        timestamp_us = record.get('timestamp', int(time.time() * 1_000_000))
+        # event_time/ingest_time are already microseconds in ProtocolRecord.to_dict
+        event_time = int(record.get('event_time') or int(time.time() * 1_000_000))
+        ingest_time = int(record.get('ingest_time') or int(time.time() * 1_000_000))
 
-        return {
-            'event_time': timestamp_us,
-            'ingest_time': int(time.time() * 1_000_000),
-            'source_name': record.get('source_name', ''),
-            'protocol_type': record.get('protocol_type', ''),
-            'tag_id': record.get('tag_id', ''),
-            'tag_name': record.get('tag_name', ''),
-            'tag_path': record.get('tag_path', record.get('tag_name', '')),
+        endpoint = record.get('endpoint', '')
+        source_name = record.get('source_name', '')
+
+        raw_node_id = metadata.get('node_id') or record.get('node_id') or ''
+
+        namespace = 0
+        node_id_out = str(raw_node_id)
+
+        # Normalize asyncua NodeId(...) -> ns=X;i=Y when possible
+        m = re.search(r"Identifier=(\d+),\s*NamespaceIndex=(\d+)", str(raw_node_id))
+        if m:
+            ident = int(m.group(1))
+            namespace = int(m.group(2))
+            node_id_out = f"ns={namespace};i={ident}"
+        else:
+            m2 = re.search(r"NamespaceIndex=(\d+)", str(raw_node_id))
+            if m2:
+                namespace = int(m2.group(1))
+
+        browse_path = record.get('topic_or_path') or metadata.get('tag_name') or metadata.get('browse_path') or ''
+
+        msg: Dict[str, Any] = {
+            'event_time': event_time,
+            'ingest_time': ingest_time,
+            'source_name': source_name,
+            'endpoint': endpoint,
+            'namespace': int(namespace),
+            'node_id': node_id_out,
+            'browse_path': str(browse_path),
+            'status_code': int(record.get('status_code') or 0),
+            'status': str(record.get('status') or 'Good'),
+            'value_type': str(record.get('value_type') or ''),
             'value': str(record.get('value', '')),
             'value_num': record.get('value_num'),
-            'data_type': record.get('data_type', 'string'),
-            'quality': record.get('quality', 'unknown'),
-            'metadata': record.get('metadata', {}),
+            # bytes field in JSON form is base64; empty is valid
+            'raw': '',
+            'plc_name': str(metadata.get('plc_name') or ''),
+            'plc_vendor': str(metadata.get('plc_vendor') or ''),
+            'plc_model': str(metadata.get('plc_model') or ''),
         }
+
+        if msg.get('value_num') is None:
+            msg.pop('value_num', None)
+
+        return msg
+
 
     async def stop(self):
         """Stop all components gracefully."""
         logger.info("Stopping UnifiedBridge...")
         self._shutdown = True
+        self._starting = False
 
         # Stop all protocol clients
         for source_name, client in self.clients.items():
@@ -564,7 +692,7 @@ class UnifiedBridge:
         self.sources.append(full_config)
 
         # Start the client if bridge is running
-        if not self._shutdown:
+        if self.running and not self._shutdown:
             try:
                 await self._start_client(full_config)
                 logger.info(f"✓ Source '{source_name}' added and started successfully")
@@ -623,7 +751,7 @@ class UnifiedBridge:
             dict: Status message with success/error
         """
         try:
-            if self.zerobus_enabled:
+            if self.zerobus_enabled and self.zerobus_clients:
                 return {'status': 'ok', 'message': 'ZeroBus already enabled'}
 
             logger.info("Starting ZeroBus streaming...")
@@ -691,7 +819,12 @@ class UnifiedBridge:
             Status dict
         """
         return {
+            'configured_sources': len(self.sources),
             'active_sources': len(self.clients),
+            'bridge_running': bool(getattr(self, 'running', False)),
+            'bridge_starting': bool(getattr(self, '_starting', False)) and not bool(getattr(self, 'running', False)),
+            'zerobus_config_enabled': self.zerobus_config_enabled,
+            'zerobus_connected': bool(self.zerobus_clients),
             'zerobus_enabled': self.zerobus_enabled,
             'zerobus_targets': list(self.zerobus_clients.keys()),
             'normalization_enabled': self.normalization_enabled,

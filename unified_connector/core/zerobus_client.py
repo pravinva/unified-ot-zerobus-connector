@@ -302,7 +302,23 @@ class ZeroBusClient:
                 return True
 
             except Exception as e:
+                msg = str(e)
                 logger.warning(f"Batch send failed (attempt {attempt + 1}/{self.max_retries}): {e}")
+
+                # If the stream was closed by the server, drop it so we reconnect on next attempt
+                if 'Cannot ingest records after stream is closed' in msg:
+                    try:
+                        await self.close()
+                    except Exception:
+                        self._stream = None
+
+                # Non-retriable schema errors (payload doesn't match table schema)
+                if 'StatusCode.INVALID_ARGUMENT' in msg or 'unrecognized field name' in msg or 'Record decoder/encoder error' in msg:
+                    self.metrics['failures'] += 1
+                    self.circuit_breaker.record_failure()
+                    logger.error('Non-retriable schema error from ZeroBus; fix record fields to match table schema')
+                    return False
+
                 self.metrics['failures'] += 1
                 self.circuit_breaker.record_failure()
 

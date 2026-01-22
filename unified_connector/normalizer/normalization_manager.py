@@ -39,8 +39,9 @@ class NormalizationManager:
             # Try default locations
             default_paths = [
                 Path("config/normalization_config.yaml"),
-                Path("iot_connector/config/normalization_config.yaml"),
+                Path("unified_connector/config/normalization_config.yaml"),
                 Path("/app/config/normalization_config.yaml"),
+                Path("/app/unified_connector/config/normalization_config.yaml"),
             ]
 
             for path in default_paths:

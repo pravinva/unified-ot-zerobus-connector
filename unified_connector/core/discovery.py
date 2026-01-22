@@ -134,7 +134,13 @@ class DiscoveryService:
         for subnet in self.subnets:
             try:
                 network = ipaddress.ip_network(subnet, strict=False)
-                ips_to_scan.extend([str(ip) for ip in network.hosts()])
+
+                # ipaddress.hosts() excludes the single address for /32 and /128.
+                # Treat single-address networks as an explicit host scan.
+                if getattr(network, 'num_addresses', 0) == 1:
+                    ips_to_scan.append(str(network.network_address))
+                else:
+                    ips_to_scan.extend([str(ip) for ip in network.hosts()])
             except Exception as e:
                 logger.error(f"Invalid subnet {subnet}: {e}")
 
@@ -222,54 +228,64 @@ class DiscoveryService:
         try:
             from asyncua import Client
 
-            endpoint = f"opc.tcp://{host}:{port}"
-            client = Client(url=endpoint, timeout=timeout)
+            endpoints = [
+                f"opc.tcp://{host}:{port}/ot-simulator/server/",
+                f"opc.tcp://{host}:{port}/",
+                f"opc.tcp://{host}:{port}",
+            ]
 
-            try:
-                await client.connect()
-
-                # Try to read server information
-                server_info = {}
-                try:
-                    app_desc = await client.nodes.server.read_description()
-                    server_info["name"] = str(getattr(app_desc, 'Text', 'Unknown'))
-                except Exception:
-                    server_info["name"] = f"OPC-UA Server ({host})"
+            for endpoint in endpoints:
+                client = Client(url=endpoint, timeout=timeout)
 
                 try:
-                    ns_arr = await client.nodes.server_namespace_array.read_value()
-                    if isinstance(ns_arr, list):
-                        server_info["namespaces"] = len(ns_arr)
-                except Exception:
-                    pass
+                    await client.connect()
 
-                try:
-                    status = await client.nodes.server_status.read_value()
-                    if hasattr(status, 'BuildInfo'):
-                        build_info = status.BuildInfo
-                        server_info["vendor"] = getattr(build_info, 'ManufacturerName', None)
-                        server_info["version"] = getattr(build_info, 'SoftwareVersion', None)
-                except Exception:
-                    pass
+                    # Try to read server information
+                    server_info = {}
+                    try:
+                        app_desc = await client.nodes.server.read_description()
+                        server_info["name"] = str(getattr(app_desc, "Text", "Unknown"))
+                    except Exception:
+                        server_info["name"] = f"OPC-UA Server ({host})"
 
-                await client.disconnect()
+                    try:
+                        ns_arr = await client.nodes.server_namespace_array.read_value()
+                        if isinstance(ns_arr, list):
+                            server_info["namespaces"] = len(ns_arr)
+                    except Exception:
+                        pass
 
-                return DiscoveredServer(
-                    protocol=ProtocolType.OPCUA,
-                    host=host,
-                    port=port,
-                    endpoint=endpoint,
-                    name=server_info.get("name", f"OPC-UA Server ({host})"),
-                    version=server_info.get("version"),
-                    vendor=server_info.get("vendor"),
-                    metadata=server_info,
-                    reachable=True
-                )
+                    try:
+                        status = await client.nodes.server_status.read_value()
+                        if hasattr(status, "BuildInfo"):
+                            build_info = status.BuildInfo
+                            server_info["vendor"] = getattr(build_info, "ManufacturerName", None)
+                            server_info["version"] = getattr(build_info, "SoftwareVersion", None)
+                    except Exception:
+                        pass
 
-            except Exception as e:
-                logger.debug(f"OPC-UA connection failed for {endpoint}: {e}")
-                await client.disconnect()
-                return None
+                    await client.disconnect()
+
+                    return DiscoveredServer(
+                        protocol=ProtocolType.OPCUA,
+                        host=host,
+                        port=port,
+                        endpoint=endpoint,
+                        name=server_info.get("name", f"OPC-UA Server ({host})"),
+                        version=server_info.get("version"),
+                        vendor=server_info.get("vendor"),
+                        metadata=server_info,
+                        reachable=True
+                    )
+
+                except Exception as e:
+                    logger.debug(f"OPC-UA connection failed for {endpoint}: {e}")
+                    try:
+                        await client.disconnect()
+                    except Exception:
+                        pass
+
+            return None
 
         except ImportError:
             logger.warning("asyncua not installed, skipping OPC-UA discovery")
@@ -466,17 +482,35 @@ class DiscoveryService:
             Test result dictionary
         """
         logger.info(f"Testing {protocol.value} connection to {host}:{port}")
+        t0 = asyncio.get_running_loop().time()
 
-        if protocol == ProtocolType.OPCUA:
-            result = await self._test_opcua_endpoint(host, port, 5.0)
-        elif protocol == ProtocolType.MQTT:
-            result = await self._test_mqtt_broker(host, port, 3.0)
-        elif protocol == ProtocolType.MODBUS:
-            result = await self._test_modbus_server(host, port, 2.0)
-        else:
-            return {"ok": False, "error": f"Unknown protocol: {protocol}"}
+        diagnostics: Dict[str, Any] = {
+            "protocol": protocol.value,
+            "host": host,
+            "port": port,
+        }
 
-        if result:
-            return {"ok": True, "server": result.to_dict()}
-        else:
-            return {"ok": False, "error": "Connection failed"}
+        try:
+            # Basic TCP check first (fast + useful diagnostics)
+            port_open = await self._is_port_open(host, port, 2.0)
+            diagnostics["tcp_port_open"] = bool(port_open)
+
+            if protocol == ProtocolType.OPCUA:
+                result = await self._test_opcua_endpoint(host, port, 5.0)
+            elif protocol == ProtocolType.MQTT:
+                # We treat "reachable" as TCP-port-open for MQTT in discovery
+                result = await self._test_mqtt_broker(host, port, 3.0)
+            elif protocol == ProtocolType.MODBUS:
+                result = await self._test_modbus_server(host, port, 2.0)
+            else:
+                return {"ok": False, "error": f"Unknown protocol: {protocol}", "diagnostics": diagnostics}
+
+            diagnostics["duration_ms"] = int((asyncio.get_running_loop().time() - t0) * 1000)
+
+            if result:
+                return {"ok": True, "server": result.to_dict(), "diagnostics": diagnostics}
+            return {"ok": False, "error": "Connection failed", "diagnostics": diagnostics}
+        except Exception as e:
+            diagnostics["duration_ms"] = int((asyncio.get_running_loop().time() - t0) * 1000)
+            diagnostics["exception"] = f"{type(e).__name__}: {e}"
+            return {"ok": False, "error": str(e), "diagnostics": diagnostics}
