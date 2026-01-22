@@ -13,8 +13,9 @@
   --warning: #F59E0B;
   --border: #E3E5E8;
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.10);
-  --radius: 10px;
-  --radius-sm: 8px;
+  --shadow-hover: 0 8px 22px rgba(0, 0, 0, 0.08);
+  --radius: 14px;
+  --radius-sm: 12px;
   --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
 }
@@ -95,6 +96,7 @@ a:hover { text-decoration: underline; }
   box-shadow: var(--shadow);
   overflow: hidden;
 }
+.card:hover { border-color: rgba(0, 169, 224, 0.35); box-shadow: var(--shadow-hover); }
 .card-header {
   display: flex;
   justify-content: space-between;
@@ -151,12 +153,18 @@ input, select, textarea {
   color: var(--text);
   background: #FFFFFF;
   border: 1px solid #D1D5DB;
-  border-radius: 8px;
+  border-radius: 12px;
   outline: none;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
 }
 input:focus, select:focus, textarea:focus {
   border-color: rgba(0, 169, 224, 0.65);
   box-shadow: 0 0 0 3px rgba(0, 169, 224, 0.15);
+}
+input:not([type="checkbox"]):hover, select:hover, textarea:hover {
+  border-color: rgba(0, 169, 224, 0.55);
+  box-shadow: 0 0 0 3px rgba(0, 169, 224, 0.10);
+  background: #FFFFFF;
 }
 textarea { min-height: 90px; resize: vertical; font-family: var(--mono); }
 
@@ -274,6 +282,26 @@ textarea { min-height: 90px; resize: vertical; font-family: var(--mono); }
 .discovery-rows { display: grid; grid-template-columns: 1fr; gap: 12px; }
 .discovery-row { padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: #F9FAFB; }
 
+/* Discovery tables: keep Reachable/Action aligned across protocols */
+.discovery-row .table {
+  table-layout: fixed;
+}
+.discovery-row .table th:nth-child(1),
+.discovery-row .table td:nth-child(1) { width: 170px; } /* Host */
+.discovery-row .table th:nth-child(2),
+.discovery-row .table td:nth-child(2) { width: 84px; }  /* Port */
+.discovery-row .table th:nth-child(4),
+.discovery-row .table td:nth-child(4) { width: 92px; }  /* Reachable */
+.discovery-row .table th:nth-child(5),
+.discovery-row .table td:nth-child(5) { width: 190px; } /* Action */
+
+/* Let endpoint wrap instead of pushing columns */
+.discovery-row .table td:nth-child(3) code {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
 /* Collapsible sections */
 .card.collapsible .card-header { align-items: center; }
 .iconbtn {
@@ -311,3 +339,14 @@ textarea { min-height: 90px; resize: vertical; font-family: var(--mono); }
   gap: 12px;
 }
 .subcard-body { margin-top: 8px; }
+
+/* Discovery actions: stack Test/Add vertically for all protocols */
+.discovery-row .actions {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+.discovery-row .actions .btn {
+  width: 100%;
+  justify-content: center;
+}

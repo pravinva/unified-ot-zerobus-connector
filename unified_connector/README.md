@@ -1,4 +1,4 @@
-# Unified OT/IoT Connector
+# Unified OT Zerobus Connector Client
 
 Enterprise-grade connector for streaming OT/IoT data from industrial protocols (OPC-UA, MQTT, Modbus) to Databricks Delta tables using ZeroBus.
 
@@ -36,7 +36,7 @@ Enterprise-grade connector for streaming OT/IoT data from industrial protocols (
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    Unified OT/IoT Connector                     │
+│                    Unified OT Zerobus Connector Client                     │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐        │

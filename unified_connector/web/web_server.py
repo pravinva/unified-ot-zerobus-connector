@@ -554,14 +554,14 @@ class WebServer:
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Unified OT/IoT Connector</title>
+  <title>Unified OT Zerobus Connector Client</title>
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
   <div class="container">
     <div class="topbar">
       <div class="title">
-        <h1>Unified OT/IoT Connector</h1>
+        <h1>Unified OT Zerobus Connector Client</h1>
       </div>
     </div>
 

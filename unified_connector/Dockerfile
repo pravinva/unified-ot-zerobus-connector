@@ -1,4 +1,4 @@
-# Unified OT/IoT Connector - Production Container
+# Unified OT Zerobus Connector Client - Production Container
 # Multi-stage build for minimal image size
 
 FROM python:3.11-slim as builder

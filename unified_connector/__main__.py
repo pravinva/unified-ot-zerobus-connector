@@ -1,4 +1,4 @@
-"""Unified OT/IoT Connector - Main Entry Point.
+"""Unified OT Zerobus Connector Client - Main Entry Point.
 
 Enterprise-grade connector for OPC-UA, MQTT, and Modbus to Databricks Delta tables.
 """
@@ -63,7 +63,7 @@ class UnifiedConnector:
     async def start(self):
         """Start all services."""
         logger.info("=" * 80)
-        logger.info("Unified OT/IoT Connector - Starting")
+        logger.info("Unified OT Zerobus Connector Client - Starting")
         logger.info("=" * 80)
 
         # Start discovery service
@@ -149,7 +149,7 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Unified OT/IoT Connector - OPC-UA, MQTT, Modbus to Databricks"
+        description="Unified OT Zerobus Connector Client - OPC-UA, MQTT, Modbus to Databricks"
     )
     parser.add_argument(
         '--config',

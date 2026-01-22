@@ -1,4 +1,4 @@
-# Unified OT/IoT Connector Dependencies
+# Unified OT Zerobus Connector Client Dependencies
 
 # Core async framework
 asyncio-mqtt>=0.16.0

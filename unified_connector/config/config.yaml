@@ -1,5 +1,5 @@
 connector:
-  name: Unified OT/IoT Connector
+  name: Unified OT Zerobus Connector Client
   log_level: INFO
   log_file: unified_connector.log
 

@@ -1,4 +1,4 @@
-"""Unified OT/IoT Connector - Core Components
+"""Unified OT Zerobus Connector Client - Core Components
 
 Enterprise-grade connector combining:
 - Protocol server discovery (OPC-UA, MQTT, Modbus)

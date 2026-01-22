@@ -1,6 +1,6 @@
 # Unified Connector - Deployment Guide
 
-Complete guide for deploying the Unified OT/IoT Connector in local, Docker, and production environments.
+Complete guide for deploying the Unified OT Zerobus Connector Client in local, Docker, and production environments.
 
 ## Table of Contents
 
@@ -101,7 +101,7 @@ Edit `unified_connector/config/config.yaml`:
 ```yaml
 # Minimal config for local dev
 connector:
-  name: "Unified OT/IoT Connector"
+  name: "Unified OT Zerobus Connector Client"
   log_level: "DEBUG"
 
 web_ui:
@@ -141,7 +141,7 @@ python -m unified_connector
 Output:
 ```
 ================================================================================
-Unified OT/IoT Connector - Starting
+Unified OT Zerobus Connector Client - Starting
 ================================================================================
 ✓ Discovery service started
 ✓ Bridge started
