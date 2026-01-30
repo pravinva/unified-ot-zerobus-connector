@@ -3,13 +3,18 @@ ZeroBus Client for Databricks IoT Connector
 
 Uses official databricks-zerobus-ingest-sdk for streaming ingestion to Unity Catalog.
 Implements circuit breaker pattern, exponential backoff, and protobuf message handling.
+Supports proxy configuration for Purdue Layer 3.5 deployments.
 """
 
 import asyncio
+import ipaddress
 import logging
+import os
+import re
 import time
 from typing import Dict, Any, List, Optional
 from enum import Enum
+from urllib.parse import urlparse
 
 from zerobus.sdk.aio import ZerobusSdk
 from zerobus.sdk.shared import TableProperties, RecordType, StreamConfigurationOptions
@@ -171,6 +176,10 @@ class ZeroBusClient:
         self.max_backoff_sec = retry_config.get('max_backoff_seconds', 300.0)
         self.backoff_multiplier = retry_config.get('backoff_multiplier', 2.0)
 
+        # Proxy settings (for Purdue Layer 3.5 deployments)
+        proxy_config = zerobus_config.get('proxy', {})
+        self._configure_proxy(proxy_config)
+
         # Circuit breaker
         circuit_config = zerobus_config.get('circuit_breaker', {})
         self.circuit_breaker = CircuitBreaker(
@@ -195,6 +204,159 @@ class ZeroBusClient:
 
         logger.info(f"ZeroBusClient initialized: table={self.full_table_name}, "
                    f"batch_size={self.batch_size}, max_retries={self.max_retries}")
+
+    def _configure_proxy(self, proxy_config: Dict[str, Any]):
+        """
+        Configure proxy settings for outbound connections to Databricks cloud (Layer 4+).
+
+        For Purdue Layer 3.5 deployments:
+        - Listens to OT devices on Layer 2/2.5/3 (no proxy needed - local network)
+        - Sends data to Databricks cloud on Layer 4+ via HTTPS/443 through corporate proxy
+
+        Args:
+            proxy_config: Proxy configuration dictionary
+        """
+        if not proxy_config.get('enabled', False):
+            logger.info("Proxy disabled")
+            return
+
+        # Check if we should use environment variables
+        use_env_vars = proxy_config.get('use_env_vars', True)
+
+        # Get proxy URLs from config or environment
+        http_proxy = proxy_config.get('http_proxy', '').strip()
+        https_proxy = proxy_config.get('https_proxy', '').strip()
+        no_proxy = proxy_config.get('no_proxy', 'localhost,127.0.0.1').strip()
+
+        # If use_env_vars is True and config values are empty, keep existing env vars
+        # If use_env_vars is False or config has values, set explicitly
+        if not use_env_vars or http_proxy or https_proxy:
+            if http_proxy:
+                os.environ['HTTP_PROXY'] = http_proxy
+                os.environ['http_proxy'] = http_proxy
+                logger.info(f"HTTP proxy configured: {http_proxy}")
+
+            if https_proxy:
+                os.environ['HTTPS_PROXY'] = https_proxy
+                os.environ['https_proxy'] = https_proxy
+                logger.info(f"HTTPS proxy configured: {https_proxy}")
+
+            if no_proxy:
+                os.environ['NO_PROXY'] = no_proxy
+                os.environ['no_proxy'] = no_proxy
+                logger.info(f"No proxy for: {no_proxy}")
+        else:
+            # Using existing environment variables
+            env_http = os.environ.get('HTTP_PROXY') or os.environ.get('http_proxy', '')
+            env_https = os.environ.get('HTTPS_PROXY') or os.environ.get('https_proxy', '')
+            env_no = os.environ.get('NO_PROXY') or os.environ.get('no_proxy', '')
+
+            if env_http or env_https:
+                logger.info(f"Using proxy from environment variables:")
+                if env_http:
+                    logger.info(f"  HTTP_PROXY: {env_http}")
+                if env_https:
+                    logger.info(f"  HTTPS_PROXY: {env_https}")
+                if env_no:
+                    logger.info(f"  NO_PROXY: {env_no}")
+                no_proxy = env_no  # Use for validation below
+            else:
+                logger.warning("Proxy enabled but no proxy URLs configured in config or environment")
+
+        # Validate OT device IPs against no_proxy ranges
+        self._validate_ot_device_proxy_bypass(no_proxy)
+
+    def _validate_ot_device_proxy_bypass(self, no_proxy: str):
+        """
+        Validate that configured OT device IPs are covered by NO_PROXY ranges.
+
+        Warns if OT devices might incorrectly route through proxy.
+
+        Args:
+            no_proxy: Comma-separated list of hosts/IPs/CIDR ranges to bypass proxy
+        """
+        if not no_proxy:
+            logger.warning("⚠️  Proxy enabled but NO_PROXY is empty - OT devices may route through proxy!")
+            return
+
+        # Parse no_proxy into networks
+        no_proxy_networks = []
+        no_proxy_hosts = []
+
+        for entry in no_proxy.split(','):
+            entry = entry.strip()
+            if not entry:
+                continue
+
+            # Check if it's a CIDR range
+            if '/' in entry:
+                try:
+                    no_proxy_networks.append(ipaddress.ip_network(entry, strict=False))
+                except ValueError:
+                    logger.debug(f"Invalid CIDR in NO_PROXY: {entry}")
+            else:
+                # It's a hostname or IP
+                no_proxy_hosts.append(entry)
+
+        # Check configured sources (OT devices)
+        sources = self.config.get('sources', [])
+        uncovered_devices = []
+
+        for source in sources:
+            endpoint = source.get('endpoint', '')
+            if not endpoint:
+                continue
+
+            # Extract host from endpoint URL
+            try:
+                # Handle different protocol formats
+                if '://' in endpoint:
+                    parsed = urlparse(endpoint)
+                    host = parsed.hostname or parsed.netloc.split(':')[0]
+                else:
+                    # Fallback for malformed URLs
+                    host = endpoint.split(':')[0]
+
+                if not host:
+                    continue
+
+                # Check if host is in no_proxy
+                if host in no_proxy_hosts or host.lower() in ['localhost', '127.0.0.1']:
+                    continue
+
+                # Try to parse as IP and check against networks
+                try:
+                    ip = ipaddress.ip_address(host)
+                    covered = any(ip in network for network in no_proxy_networks)
+
+                    if not covered:
+                        uncovered_devices.append(f"{source.get('name', 'unknown')}: {endpoint}")
+
+                except ValueError:
+                    # It's a hostname, not an IP - check if domain matches
+                    # (e.g., .internal would match sensor.internal)
+                    domain_match = any(
+                        entry.startswith('.') and host.endswith(entry)
+                        for entry in no_proxy_hosts
+                    )
+                    if not domain_match:
+                        logger.debug(f"Hostname {host} not explicitly in NO_PROXY (this may be OK)")
+
+            except Exception as e:
+                logger.debug(f"Could not parse endpoint {endpoint}: {e}")
+
+        # Warn if any OT devices are not covered by NO_PROXY
+        if uncovered_devices:
+            logger.warning(
+                f"⚠️  {len(uncovered_devices)} OT device(s) not covered by NO_PROXY - they may route through proxy!\n"
+                f"   Uncovered devices:\n" +
+                '\n'.join(f"     - {dev}" for dev in uncovered_devices) +
+                f"\n   Current NO_PROXY: {no_proxy}\n"
+                f"   Consider adding these network ranges to NO_PROXY:\n"
+                f"     - 192.168.0.0/16 (common for OT networks)\n"
+                f"     - 10.0.0.0/8 (common for OT networks)\n"
+                f"     - 172.16.0.0/12 (common for OT networks)"
+            )
 
     async def connect(self, protobuf_descriptor=None):
         """

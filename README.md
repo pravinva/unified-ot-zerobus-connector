@@ -129,3 +129,63 @@ Protocol clients (OPC-UA / MQTT / Modbus)
 
 **Security note**: do not commit ZeroBus secrets. Configure credentials via the UI, env vars, or local credential store.
 
+### Proxy Configuration (Purdue Layer 3.5)
+
+For deployments in Layer 3.5 (DMZ) that need to route cloud traffic through a corporate proxy:
+
+**Option 1: Web UI**
+1. Navigate to the ZeroBus configuration section
+2. Enable "Proxy Settings (for Purdue Layer 3.5)"
+3. Configure:
+   - **Enable Proxy**: Check to enable proxy support
+   - **Use Environment Variables**: Check to use HTTP_PROXY/HTTPS_PROXY env vars
+   - **HTTP Proxy**: e.g., `http://proxy.company.com:8080`
+   - **HTTPS Proxy**: e.g., `http://proxy.company.com:8080`
+   - **No Proxy**: Comma-separated hosts to bypass (e.g., `localhost,127.0.0.1,.internal`)
+
+**Option 2: config.yaml**
+```yaml
+zerobus:
+  enabled: true
+  proxy:
+    enabled: true
+    use_env_vars: true  # Use HTTP_PROXY/HTTPS_PROXY from environment
+    http_proxy: "http://proxy.company.com:8080"
+    https_proxy: "http://proxy.company.com:8080"
+    no_proxy: "localhost,127.0.0.1"
+```
+
+**Option 3: Environment Variables**
+```bash
+export HTTP_PROXY=http://proxy.company.com:8080
+export HTTPS_PROXY=http://proxy.company.com:8080
+export NO_PROXY=localhost,127.0.0.1
+```
+
+**Option 4: Docker Compose**
+```yaml
+services:
+  unified-connector:
+    environment:
+      - HTTP_PROXY=http://proxy.company.com:8080
+      - HTTPS_PROXY=http://proxy.company.com:8080
+      - NO_PROXY=localhost,127.0.0.1
+```
+
+**Network Flow with Proxy:**
+```
+OT Devices (Layer 2/3) - REMOTE, NOT localhost
+  └─> Unified Connector (Layer 3.5)
+        ├─> Local OT Network (NO PROXY - Direct Connection)
+        │   - OPC-UA Server 1: opc.tcp://192.168.20.100:4840
+        │   - OPC-UA Server 2: opc.tcp://10.5.10.50:4841
+        │   - MQTT Broker: mqtt://192.168.20.200:1883
+        │   - Modbus Device: modbus://172.16.5.100:502
+        │
+        └─> Databricks Cloud (THROUGH PROXY on 443)
+            - Workspace API: https://workspace.cloud.databricks.com
+            - ZeroBus: *.zerobus.*.cloud.databricks.com
+```
+
+**IMPORTANT**: OT devices are typically **NOT on localhost** - they are remote devices on your plant/factory network (192.168.x.x, 10.x.x.x, 172.16.x.x). The `no_proxy` setting uses CIDR notation to bypass the proxy for entire network ranges.
+

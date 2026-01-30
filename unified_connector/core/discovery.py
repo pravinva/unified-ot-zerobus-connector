@@ -174,6 +174,11 @@ class DiscoveryService:
 
         return discovered
 
+    def _cache_server(self, server: DiscoveredServer) -> None:
+        """Insert/update a single discovered server in the cache."""
+        server_key = f"{server.protocol.value}://{server.host}:{server.port}"
+        self.discovered_servers[server_key] = server
+
     async def _discover_opcua_servers(self, ips: List[str]) -> List[DiscoveredServer]:
         """Discover OPC-UA servers.
 
@@ -199,6 +204,7 @@ class DiscoveryService:
             for result in results:
                 if isinstance(result, DiscoveredServer):
                     discovered.append(result)
+                    self._cache_server(result)
                     logger.info(f"  ✓ Found OPC-UA server: {result.endpoint}")
 
         logger.info(f"Found {len(discovered)} OPC-UA servers")
@@ -224,6 +230,11 @@ class DiscoveryService:
         if not await self._is_port_open(host, port, timeout):
             return None
 
+        # If the port is open but asyncua cannot complete an OPC-UA handshake
+        # (e.g., dependency/runtime incompatibilities), still surface the server
+        # in discovery as "unverified" rather than hiding it.
+        base_endpoint = f"opc.tcp://{host}:{port}"
+
         # Try to connect with asyncua
         try:
             from asyncua import Client
@@ -234,6 +245,7 @@ class DiscoveryService:
                 f"opc.tcp://{host}:{port}",
             ]
 
+            last_err: Exception | None = None
             for endpoint in endpoints:
                 client = Client(url=endpoint, timeout=timeout)
 
@@ -279,20 +291,56 @@ class DiscoveryService:
                     )
 
                 except Exception as e:
+                    last_err = e
                     logger.debug(f"OPC-UA connection failed for {endpoint}: {e}")
                     try:
                         await client.disconnect()
                     except Exception:
                         pass
 
-            return None
+            # Port is open but we couldn't complete a handshake; report unverified.
+            meta: Dict[str, Any] = {
+                "verified": False,
+                "error": str(last_err) if last_err else "unknown",
+            }
+            return DiscoveredServer(
+                protocol=ProtocolType.OPCUA,
+                host=host,
+                port=port,
+                endpoint=base_endpoint,
+                name=f"OPC-UA Server ({host})",
+                version=None,
+                vendor=None,
+                metadata=meta,
+                reachable=False,
+            )
 
         except ImportError:
-            logger.warning("asyncua not installed, skipping OPC-UA discovery")
-            return None
+            logger.warning("asyncua not installed, reporting OPC-UA server as unverified")
+            return DiscoveredServer(
+                protocol=ProtocolType.OPCUA,
+                host=host,
+                port=port,
+                endpoint=base_endpoint,
+                name=f"OPC-UA Server ({host})",
+                version=None,
+                vendor=None,
+                metadata={"verified": False, "error": "asyncua not installed"},
+                reachable=False,
+            )
         except Exception as e:
             logger.debug(f"OPC-UA test failed for {host}:{port}: {e}")
-            return None
+            return DiscoveredServer(
+                protocol=ProtocolType.OPCUA,
+                host=host,
+                port=port,
+                endpoint=base_endpoint,
+                name=f"OPC-UA Server ({host})",
+                version=None,
+                vendor=None,
+                metadata={"verified": False, "error": str(e)},
+                reachable=False,
+            )
 
     async def _discover_mqtt_brokers(self, ips: List[str]) -> List[DiscoveredServer]:
         """Discover MQTT brokers.
@@ -319,6 +367,7 @@ class DiscoveryService:
             for result in results:
                 if isinstance(result, DiscoveredServer):
                     discovered.append(result)
+                    self._cache_server(result)
                     logger.info(f"  ✓ Found MQTT broker: {result.host}:{result.port}")
 
         logger.info(f"Found {len(discovered)} MQTT brokers")
@@ -387,6 +436,7 @@ class DiscoveryService:
             for result in results:
                 if isinstance(result, DiscoveredServer):
                     discovered.append(result)
+                    self._cache_server(result)
                     logger.info(f"  ✓ Found Modbus server: {result.host}:{result.port}")
 
         logger.info(f"Found {len(discovered)} Modbus servers")

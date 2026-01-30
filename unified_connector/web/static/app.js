@@ -276,6 +276,14 @@ async function loadZerobus() {
   $("#zbSecretHint").textContent = z.auth.has_secret
     ? "A secret is already stored (leave blank to keep it)."
     : "No secret stored yet.";
+
+  // Load proxy settings
+  const proxy = z.proxy || {};
+  $("#zbProxyEnabled").checked = proxy.enabled || false;
+  $("#zbProxyUseEnv").checked = proxy.use_env_vars !== false; // default true
+  $("#zbProxyHttp").value = proxy.http_proxy || "";
+  $("#zbProxyHttps").value = proxy.https_proxy || "";
+  $("#zbProxyNoProxy").value = proxy.no_proxy || "localhost,127.0.0.1";
 }
 
 async function saveZerobus() {
@@ -299,13 +307,21 @@ async function saveZerobus() {
     auth: {
       client_id: $("#zbClientId").value.trim(),
     },
+    proxy: {
+      enabled: $("#zbProxyEnabled").checked,
+      use_env_vars: $("#zbProxyUseEnv").checked,
+      http_proxy: $("#zbProxyHttp").value.trim(),
+      https_proxy: $("#zbProxyHttps").value.trim(),
+      no_proxy: $("#zbProxyNoProxy").value.trim(),
+    },
   };
 
   const secret = $("#zbClientSecret").value;
   if (secret && secret.trim()) payload.auth.client_secret = secret.trim();
 
-  await apiFetch("/api/zerobus/config", { method: "POST", body: JSON.stringify(payload) });
-  toast("ZeroBus config saved", "ok");
+  const res = await apiFetch("/api/zerobus/config", { method: "POST", body: JSON.stringify(payload) });
+  if (res?.warning) toast(res.warning, "warn");
+  else toast("ZeroBus config saved", "ok");
   await loadZerobus();
   await refreshStatus();
 }

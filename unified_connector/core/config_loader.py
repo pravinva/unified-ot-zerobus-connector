@@ -38,8 +38,8 @@ class ConfigLoader:
 
         self.credential_manager = credential_manager
 
-    def load(self) -> Dict[str, Any]:
-        """Load configuration from YAML file with credential injection.
+    def load(self, inject_credentials: bool = True) -> Dict[str, Any]:
+        """Load configuration from YAML file (optionally inject credentials).
 
         Returns:
             Configuration dictionary with credentials injected
@@ -54,8 +54,10 @@ class ConfigLoader:
         if not config:
             raise ValueError(f"Empty configuration file: {self.config_path}")
 
-        # Inject credentials
-        config = self._inject_credentials(config)
+        # Inject credentials (optional). IMPORTANT: callers that plan to save the config
+        # should load with inject_credentials=False to avoid persisting secrets.
+        if inject_credentials:
+            config = self._inject_credentials(config)
 
         logger.info(f"Loaded configuration from {self.config_path}")
         return config
@@ -131,7 +133,7 @@ class ConfigLoader:
             True if successful, False otherwise
         """
         try:
-            config = self.load()
+            config = self.load(inject_credentials=False)
             config['sources'] = sources
             return self.save(config)
         except Exception as e:
@@ -148,7 +150,7 @@ class ConfigLoader:
             True if successful, False otherwise
         """
         try:
-            config = self.load()
+            config = self.load(inject_credentials=False)
             config['zerobus'] = {**config.get('zerobus', {}), **zerobus_config}
             return self.save(config)
         except Exception as e:

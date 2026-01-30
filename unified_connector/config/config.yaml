@@ -2,16 +2,13 @@ connector:
   name: Unified OT Zerobus Connector Client
   log_level: INFO
   log_file: unified_connector.log
-
 bridge:
-  autostart: false
-
+  autostart: true
 web_ui:
   enabled: true
   host: 0.0.0.0
-  port: 8080
+  port: 8082
   auto_open_browser: false
-
 discovery:
   enabled: true
   network:
@@ -19,7 +16,6 @@ discovery:
     scan_interval_sec: 300
     subnets:
     - 127.0.0.1/32
-    # Add your LAN subnet so discovery can find non-local OT endpoints too
     - 192.168.20.0/24
   opcua:
     enabled: true
@@ -35,7 +31,6 @@ discovery:
     default_tcp_port: 502
     alt_tcp_port: 5020
     timeout_sec: 2.0
-
 sources:
 - name: ot-simulator-opcua
   protocol: opcua
@@ -54,7 +49,10 @@ sources:
   protocol: mqtt
   endpoint: mqtt://127.0.0.1:1883
   enabled: true
-
+- name: opcua-127-0-0-1-4841
+  protocol: opcua
+  endpoint: opc.tcp://127.0.0.1:4841/ot-simulator/server/
+  enabled: true
 normalization:
   enabled: true
   path_template: '{site}/{area}/{line}/{equipment}/{signal_type}/{tag_name}'
@@ -90,24 +88,31 @@ normalization:
       - 2
       - 3
       - 4
-
 zerobus:
   enabled: true
-  workspace_host: ""
-  zerobus_endpoint: ""
+  workspace_host: https://e2-demo-field-eng.cloud.databricks.com
+  zerobus_endpoint: 1444828305810485.zerobus.us-west-2.cloud.databricks.com
   default_target:
-    workspace_host: ""
+    workspace_host: https://e2-demo-field-eng.cloud.databricks.com
     catalog: opcua
     schema: scada_data
     table: opcua_events_bronze
   auth:
-    client_id: ""
-    client_secret: ""
+    client_id: ${credential:zerobus.client_id}
+    client_secret: ${credential:zerobus.client_secret}
   batch:
     max_records: 1000
     timeout_seconds: 5.0
   source_targets: {}
-
+  proxy:
+    enabled: false
+    http_proxy: ""
+    https_proxy: ""
+    # no_proxy: Bypass proxy for these hosts (OT devices on local network)
+    # Include localhost AND your OT network CIDR ranges
+    # Common OT networks: 192.168.0.0/16 (Class C), 10.0.0.0/8 (Class A), 172.16.0.0/12 (Class B)
+    no_proxy: "localhost,127.0.0.1,192.168.0.0/16,10.0.0.0/8,172.16.0.0/12"
+    use_env_vars: true
 backpressure:
   max_queue_size: 50000
   drop_policy: oldest
@@ -116,12 +121,10 @@ backpressure:
     directory: ./spool
     max_size_mb: 500
     compression: gzip
-
 credentials:
   storage:
     type: encrypted
     file: ~/.unified_connector/credentials.enc
-
 monitoring:
   health_check:
     enabled: true
@@ -133,10 +136,8 @@ monitoring:
   stats:
     enabled: true
     update_interval_seconds: 10
-
 performance:
   max_concurrent_connections: 100
   connection_pool_size: 20
   read_buffer_size: 8192
   write_buffer_size: 8192
-

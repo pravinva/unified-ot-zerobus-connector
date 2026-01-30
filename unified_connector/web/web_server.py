@@ -447,20 +447,73 @@ class WebServer:
             from unified_connector.core.credential_manager import CredentialManager
             cred_manager = CredentialManager()
 
-            if 'auth' in data:
-                if 'client_id' in data['auth']:
-                    cred_manager.update_credential('zerobus.client_id', data['auth']['client_id'])
-                if 'client_secret' in data['auth']:
-                    cred_manager.update_credential('zerobus.client_secret', data['auth']['client_secret'])
+            auth_in = (data.get('auth') or {}) if isinstance(data, dict) else {}
+            warning: str | None = None
 
-            # Update config file
+            client_id = (auth_in.get('client_id') or '').strip() if isinstance(auth_in, dict) else ''
+            client_secret = (auth_in.get('client_secret') or '').strip() if isinstance(auth_in, dict) else ''
+
+            stored_client_id = False
+            stored_client_secret = False
+
+            # client_id is not a secret, but we still prefer to store consistently.
+            if client_id:
+                stored_client_id = bool(cred_manager.update_credential('zerobus.client_id', client_id))
+                if not stored_client_id:
+                    # Fall back to saving client_id in config.yaml (safe)
+                    warning = warning or "Client ID could not be stored in the credential store; it will be saved in config.yaml."
+
+            # client_secret MUST NOT be written to config.yaml.
+            if client_secret:
+                stored_client_secret = bool(cred_manager.update_credential('zerobus.client_secret', client_secret))
+                if not stored_client_secret:
+                    warning = (
+                        "Client secret was NOT stored (missing CONNECTOR_MASTER_PASSWORD). "
+                        "Set CONNECTOR_MASTER_PASSWORD (recommended) or provide CONNECTOR_ZEROBUS_CLIENT_SECRET env var."
+                    )
+
+            # Update config file (IMPORTANT: load raw to avoid persisting injected secrets)
             from unified_connector.core.config_loader import ConfigLoader
-            config_loader = ConfigLoader()
-            config = config_loader.load()
-            config['zerobus'] = {**config.get('zerobus', {}), **data}
-            config_loader.save(config)
+            config_loader = ConfigLoader(credential_manager=cred_manager)
+            config_raw = config_loader.load(inject_credentials=False)
 
-            return web.json_response({'status': 'ok', 'message': 'ZeroBus configuration updated'})
+            existing = config_raw.get('zerobus', {}) or {}
+            merged = {**existing, **data}
+
+            # Sanitize auth before persisting
+            existing_auth = (existing.get('auth') or {}) if isinstance(existing, dict) else {}
+            auth_out = dict(existing_auth) if isinstance(existing_auth, dict) else {}
+
+            if client_id:
+                auth_out['client_id'] = '${credential:zerobus.client_id}' if stored_client_id else client_id
+            # Always keep client_secret as placeholder if user attempted to set it.
+            if client_secret:
+                auth_out['client_secret'] = '${credential:zerobus.client_secret}'
+
+            merged['auth'] = auth_out
+            config_raw['zerobus'] = merged
+
+            ok = config_loader.save(config_raw)
+            if not ok:
+                return web.json_response({'status': 'error', 'message': 'Failed to save configuration'}, status=500)
+
+            # Reload injected config into memory so GET/diagnostics reflect latest saved values
+            self.config = config_loader.load(inject_credentials=True)
+            try:
+                # Update bridge config view (without restarting running tasks)
+                self.bridge.config = self.config
+                self.bridge.sources = self.config.get('sources', [])
+                self.bridge.zerobus_config = self.config.get('zerobus', {}) or {}
+                self.bridge.zerobus_config_enabled = bool(self.bridge.zerobus_config.get('enabled', False))
+                self.bridge.batch_size = self.bridge.zerobus_config.get('batch', {}).get('max_records', 1000)
+                self.bridge.batch_timeout_sec = self.bridge.zerobus_config.get('batch', {}).get('timeout_seconds', 5.0)
+            except Exception:
+                pass
+
+            resp = {'status': 'ok', 'message': 'ZeroBus configuration updated'}
+            if warning:
+                resp['warning'] = warning
+            return web.json_response(resp)
 
         except Exception as e:
             logger.error(f"Failed to update ZeroBus config: {e}", exc_info=True)
@@ -695,6 +748,42 @@ class WebServer:
                 <span class="muted">Allow streaming when started</span>
               </div>
             </label>
+          </div>
+
+          <div class="section-title" style="margin-top: 20px">Proxy Settings (for Purdue Layer 3.5)</div>
+          <div class="muted" style="margin-bottom: 12px">Configure proxy for outbound connections to Databricks cloud (Layer 4+). Leave blank to use environment variables.</div>
+          <div class="zerobus-fields split">
+            <label>
+              Enable Proxy
+              <div class="row" style="gap:8px">
+                <input id="zbProxyEnabled" type="checkbox" style="width:18px;height:18px" />
+                <span class="muted">Route cloud traffic through proxy</span>
+              </div>
+            </label>
+
+            <label>
+              Use Environment Variables
+              <div class="row" style="gap:8px">
+                <input id="zbProxyUseEnv" type="checkbox" style="width:18px;height:18px" checked />
+                <span class="muted">Use HTTP_PROXY/HTTPS_PROXY env vars</span>
+              </div>
+            </label>
+
+            <label class="full">
+              HTTP Proxy
+              <input id="zbProxyHttp" placeholder="http://proxy.company.com:8080" />
+            </label>
+
+            <label class="full">
+              HTTPS Proxy
+              <input id="zbProxyHttps" placeholder="http://proxy.company.com:8080" />
+            </label>
+
+            <label class="full">
+              No Proxy
+              <input id="zbProxyNoProxy" placeholder="localhost,127.0.0.1,.internal" />
+              <div class="muted" style="margin-top:6px">Comma-separated list of hosts to bypass proxy</div>
+            </label>
 
             <div class="row" style="grid-column: 1 / -1; margin-top: 6px">
               <button id="btnLoadZerobus" class="btn btn-secondary" type="button">Reload</button>
@@ -702,8 +791,11 @@ class WebServer:
               <button id="btnStartZerobus" class="btn btn-good" type="button">Start</button>
               <button id="btnStopZerobus" class="btn btn-warning" type="button">Stop</button>
               <button id="btnZerobusDiag" class="btn btn-secondary" type="button">Diagnostics</button>
-                        <div class="section-title">ZeroBus diagnostics</div>
-            <div id="zbDiag" class="codebox">Click “Diagnostics” to run checks.</div>
+            </div>
+          </div>
+
+          <div class="section-title">ZeroBus diagnostics</div>
+          <div id="zbDiag" class="codebox">Click "Diagnostics" to run checks.</div>
 </div>
           </div>
         </div>
