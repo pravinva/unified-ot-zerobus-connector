@@ -5,6 +5,7 @@ Provides REST API and web interface for:
 - ZeroBus target configuration
 - Data flow monitoring
 - Credential management
+- OAuth2 authentication and RBAC (NIS2 compliance)
 """
 
 import asyncio
@@ -15,6 +16,12 @@ from typing import Any, Dict, Optional
 
 from aiohttp import web
 import aiohttp_cors
+
+# Authentication and authorization (NIS2 compliance)
+from unified_connector.web.auth import AuthenticationManager, auth_middleware
+from unified_connector.web.rbac import (
+    require_permission, require_role, Permission, Role, get_role_info
+)
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +54,17 @@ class WebServer:
 
         static_dir = Path(__file__).parent / "static"
 
+        # Setup authentication (NIS2 compliance)
+        auth_config = self.config.get('web_ui', {}).get('authentication', {})
+        if auth_config.get('enabled', False):
+            auth_manager = AuthenticationManager(auth_config)
+            await auth_manager.setup(self.app)
+            # Add auth middleware
+            self.app.middlewares.append(auth_middleware)
+            logger.info("✓ Authentication enabled (NIS2 compliant)")
+        else:
+            logger.warning("⚠️  Authentication disabled - NOT NIS2 compliant!")
+
         # Setup CORS
         cors = aiohttp_cors.setup(self.app, defaults={
             "*": aiohttp_cors.ResourceOptions(
@@ -59,6 +77,14 @@ class WebServer:
 
         # API Routes
         routes = [
+            # Authentication (NIS2 compliance)
+            web.get('/login', self.handle_login),
+            web.get('/login/callback', self.handle_oauth_callback),
+            web.post('/logout', self.handle_logout),
+            web.get('/api/auth/status', self.get_auth_status),
+            web.get('/api/auth/permissions', self.get_user_permissions),
+            web.get('/api/auth/roles', self.get_role_info),
+
             # Discovery
             web.get('/api/discovery/servers', self.get_discovered_servers),
             web.post('/api/discovery/scan', self.trigger_discovery_scan),
