@@ -42,6 +42,12 @@ services:
       # ZeroBus credentials (optional, can be set via Web UI)
       - CONNECTOR_ZEROBUS_CLIENT_ID=${CONNECTOR_ZEROBUS_CLIENT_ID:-}
       - CONNECTOR_ZEROBUS_CLIENT_SECRET=${CONNECTOR_ZEROBUS_CLIENT_SECRET:-}
+      # OAuth2 Authentication (NIS2 Compliance)
+      - OAUTH_CLIENT_ID=${OAUTH_CLIENT_ID:-}
+      - OAUTH_CLIENT_SECRET=${OAUTH_CLIENT_SECRET:-}
+      - OAUTH_TENANT_ID=${OAUTH_TENANT_ID:-}
+      # Session Security (generate with: python -c "import secrets; print(secrets.token_urlsafe(32))")
+      - SESSION_SECRET_KEY=${SESSION_SECRET_KEY:-}
     volumes:
       - ./unified_connector:/app/unified_connector
       - ./unified_connector/config:/app/config

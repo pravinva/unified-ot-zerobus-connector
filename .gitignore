@@ -21,6 +21,18 @@ certs/
 ot_simulator/certs/*.pem
 ot_simulator/certs/*.key
 
+# Environment variables and secrets (NIS2 Compliance - NEVER COMMIT)
+.env
+.env.local
+.env.*.local
+*.enc
+credentials.enc
+session_keys.txt
+
+# Authentication tokens and OAuth state
+oauth_state/
+.oauth_cache/
+
 # Temporary development/tracking documents (keep locally, not in repo)
 docs/CONVERSATION_SUMMARY.md
 docs/DATABRICKS_APPS_DEPLOYMENT.md

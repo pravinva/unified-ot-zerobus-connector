@@ -1,5 +1,9 @@
 /* Unified Connector Web UI (vanilla JS) */
 
+// Global state for current user and permissions
+let currentUser = null;
+let userPermissions = [];
+
 function $(sel) {
   const el = document.querySelector(sel);
   if (!el) throw new Error(`Missing element: ${sel}`);
@@ -28,8 +32,15 @@ function toast(message, kind = "ok") {
 async function apiFetch(path, options = {}) {
   const resp = await fetch(path, {
     headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+    credentials: "include", // Important for session cookies
     ...options,
   });
+
+  // Handle 401 Unauthorized - redirect to login
+  if (resp.status === 401) {
+    window.location.href = "/static/login.html";
+    throw new Error("Authentication required");
+  }
 
   const contentType = resp.headers.get("content-type") || "";
   let body = null;
@@ -652,12 +663,201 @@ async function refreshAll() {
   ]);
 }
 
+// Authentication functions
+
+async function checkAuth() {
+  try {
+    const authStatus = await apiFetch("/api/auth/status");
+    if (!authStatus.authenticated) {
+      window.location.href = "/static/login.html";
+      return false;
+    }
+    currentUser = authStatus.user;
+    return true;
+  } catch (error) {
+    console.error("Auth check failed:", error);
+    window.location.href = "/static/login.html";
+    return false;
+  }
+}
+
+async function loadUserPermissions() {
+  try {
+    const permData = await apiFetch("/api/auth/permissions");
+    userPermissions = permData.permissions || [];
+    return true;
+  } catch (error) {
+    console.error("Failed to load permissions:", error);
+    return false;
+  }
+}
+
+function hasPermission(permission) {
+  return userPermissions.includes(permission);
+}
+
+function canRead() {
+  return hasPermission("read");
+}
+
+function canWrite() {
+  return hasPermission("write");
+}
+
+function canConfigure() {
+  return hasPermission("configure");
+}
+
+function canStartStop() {
+  return hasPermission("start_stop");
+}
+
+function canDelete() {
+  return hasPermission("delete");
+}
+
+function adaptUIForPermissions() {
+  // Disable/hide buttons based on permissions
+
+  // Discovery scan requires WRITE
+  const btnDiscoveryScan = document.getElementById("btnDiscoveryScan");
+  if (btnDiscoveryScan && !canWrite()) {
+    btnDiscoveryScan.disabled = true;
+    btnDiscoveryScan.title = "Requires write permission";
+  }
+
+  // Source add/edit requires WRITE
+  const srcSubmit = document.getElementById("srcSubmit");
+  if (srcSubmit && !canWrite()) {
+    srcSubmit.disabled = true;
+    srcSubmit.title = "Requires write permission";
+  }
+
+  // Start/stop buttons require START_STOP
+  for (const btn of document.querySelectorAll('[data-action="start"], [data-action="stop"]')) {
+    if (!canStartStop()) {
+      btn.disabled = true;
+      btn.title = "Requires start/stop permission";
+    }
+  }
+
+  const btnStartBridge = document.getElementById("btnStartBridge");
+  if (btnStartBridge && !canStartStop()) {
+    btnStartBridge.disabled = true;
+    btnStartBridge.title = "Requires start/stop permission";
+  }
+
+  const btnStartSelected = document.getElementById("btnStartSelected");
+  if (btnStartSelected && !canStartStop()) {
+    btnStartSelected.disabled = true;
+    btnStartSelected.title = "Requires start/stop permission";
+  }
+
+  const btnStopSelected = document.getElementById("btnStopSelected");
+  if (btnStopSelected && !canStartStop()) {
+    btnStopSelected.disabled = true;
+    btnStopSelected.title = "Requires start/stop permission";
+  }
+
+  const btnStartZerobus = document.getElementById("btnStartZerobus");
+  if (btnStartZerobus && !canStartStop()) {
+    btnStartZerobus.disabled = true;
+    btnStartZerobus.title = "Requires start/stop permission";
+  }
+
+  const btnStopZerobus = document.getElementById("btnStopZerobus");
+  if (btnStopZerobus && !canStartStop()) {
+    btnStopZerobus.disabled = true;
+    btnStopZerobus.title = "Requires start/stop permission";
+  }
+
+  // ZeroBus config save requires CONFIGURE
+  const btnSaveZerobus = document.getElementById("btnSaveZerobus");
+  if (btnSaveZerobus && !canConfigure()) {
+    btnSaveZerobus.disabled = true;
+    btnSaveZerobus.title = "Requires configure permission (admin only)";
+  }
+
+  // Delete buttons require DELETE
+  for (const btn of document.querySelectorAll('[data-action="delete"]')) {
+    if (!canDelete()) {
+      btn.disabled = true;
+      btn.title = "Requires delete permission (admin only)";
+    }
+  }
+
+  // If viewer role (read only), add visual indicator
+  if (canRead() && !canWrite()) {
+    const title = document.querySelector(".topbar .title h1");
+    if (title) {
+      const badge = document.createElement("span");
+      badge.style.cssText = "font-size: 14px; color: #666; margin-left: 12px; font-weight: normal;";
+      badge.textContent = "(Read-Only)";
+      title.appendChild(badge);
+    }
+  }
+}
+
+function displayUserInfo() {
+  if (!currentUser) return;
+
+  // Add user info to topbar
+  const topbar = document.querySelector(".topbar .title");
+  if (!topbar) return;
+
+  const userInfo = document.createElement("div");
+  userInfo.style.cssText = "display: flex; align-items: center; gap: 12px; font-size: 14px;";
+  userInfo.innerHTML = `
+    <span style="color: #666;">
+      <strong>${escapeHtml(currentUser.name || currentUser.email)}</strong>
+      <span style="margin-left: 8px; color: #999;">(${escapeHtml(currentUser.role)})</span>
+    </span>
+    <button id="btnLogout" class="btn btn-secondary" style="padding: 6px 12px; font-size: 13px;">Logout</button>
+  `;
+
+  topbar.appendChild(userInfo);
+
+  // Wire logout button
+  const btnLogout = document.getElementById("btnLogout");
+  if (btnLogout) {
+    btnLogout.addEventListener("click", async () => {
+      try {
+        await fetch("/logout", {
+          method: "POST",
+          credentials: "include"
+        });
+        window.location.href = "/static/login.html";
+      } catch (error) {
+        console.error("Logout failed:", error);
+        toast("Logout failed", "bad");
+      }
+    });
+  }
+}
+
 async function boot() {
   try {
+    // Check authentication first
+    const authenticated = await checkAuth();
+    if (!authenticated) return;
+
+    // Load user permissions
+    await loadUserPermissions();
+
+    // Display user info in header
+    displayUserInfo();
+
+    // Wire up event handlers
     wireEvents();
     resetSourceForm();
+
+    // Load data
     await loadZerobus();
     await refreshAll();
+
+    // Adapt UI based on permissions (must be after wireEvents and refreshAll)
+    adaptUIForPermissions();
+
     toast("UI ready", "ok");
   } catch (e) {
     onError(e);

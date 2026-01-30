@@ -47,6 +47,7 @@ class WebServer:
 
         self.app = None
         self.runner = None
+        self.auth_manager = None
 
     async def start(self):
         """Start web server."""
@@ -57,8 +58,8 @@ class WebServer:
         # Setup authentication (NIS2 compliance)
         auth_config = self.config.get('web_ui', {}).get('authentication', {})
         if auth_config.get('enabled', False):
-            auth_manager = AuthenticationManager(auth_config)
-            await auth_manager.setup(self.app)
+            self.auth_manager = AuthenticationManager(auth_config)
+            await self.auth_manager.setup(self.app)
             # Add auth middleware
             self.app.middlewares.append(auth_middleware)
             logger.info("✓ Authentication enabled (NIS2 compliant)")
@@ -145,6 +146,7 @@ class WebServer:
 
     # API Handlers
 
+    @require_permission(Permission.READ)
     async def get_discovered_servers(self, request: web.Request) -> web.Response:
         """Get list of discovered protocol servers."""
         protocol = request.query.get('protocol')
@@ -164,6 +166,7 @@ class WebServer:
             'count': len(servers)
         })
 
+    @require_permission(Permission.WRITE)
     async def trigger_discovery_scan(self, request: web.Request) -> web.Response:
         """Trigger immediate discovery scan."""
         try:
@@ -172,6 +175,7 @@ class WebServer:
         except Exception as e:
             return web.json_response({'status': 'error', 'message': str(e)}, status=500)
 
+    @require_permission(Permission.READ)
     async def test_server_connection(self, request: web.Request) -> web.Response:
         """Test connection to a specific server."""
         try:
@@ -198,11 +202,13 @@ class WebServer:
         except Exception as e:
             return web.json_response({'status': 'error', 'message': str(e)}, status=500)
 
+    @require_permission(Permission.READ)
     async def get_sources(self, request: web.Request) -> web.Response:
         """Get configured data sources."""
         sources = self.config.get('sources', [])
         return web.json_response({'sources': sources})
 
+    @require_permission(Permission.WRITE)
     async def add_source(self, request: web.Request) -> web.Response:
         """Add new data source."""
         try:
@@ -237,6 +243,7 @@ class WebServer:
             logger.error(f"Failed to add source: {e}", exc_info=True)
             return web.json_response({'status': 'error', 'message': str(e)}, status=500)
 
+    @require_permission(Permission.DELETE)
     async def remove_source(self, request: web.Request) -> web.Response:
         """Remove data source."""
         try:
@@ -258,6 +265,7 @@ class WebServer:
             logger.error(f"Failed to remove source: {e}", exc_info=True)
             return web.json_response({'status': 'error', 'message': str(e)}, status=500)
 
+    @require_permission(Permission.WRITE)
     async def update_source(self, request: web.Request) -> web.Response:
         """Update data source configuration."""
         try:
@@ -290,6 +298,7 @@ class WebServer:
 
 
 
+    @require_permission(Permission.START_STOP)
     async def start_source(self, request: web.Request) -> web.Response:
         """Start a single configured source."""
         try:
@@ -300,6 +309,7 @@ class WebServer:
             logger.error(f"Failed to start source: {e}", exc_info=True)
             return web.json_response({'status': 'error', 'message': str(e)}, status=500)
 
+    @require_permission(Permission.START_STOP)
     async def stop_source(self, request: web.Request) -> web.Response:
         """Stop a single active source."""
         try:
@@ -311,6 +321,7 @@ class WebServer:
             return web.json_response({'status': 'error', 'message': str(e)}, status=500)
 
 
+    @require_permission(Permission.READ)
     async def get_zerobus_config(self, request: web.Request) -> web.Response:
         """Get ZeroBus configuration."""
         zerobus_config = self.config.get('zerobus', {})
@@ -326,6 +337,7 @@ class WebServer:
         return web.json_response(safe_config)
 
 
+    @require_permission(Permission.READ)
     async def get_zerobus_diagnostics(self, request: web.Request) -> web.Response:
         """Return ZeroBus config diagnostics (no node metrics)."""
         import os
@@ -464,6 +476,7 @@ class WebServer:
 
 
 
+    @require_permission(Permission.CONFIGURE)
     async def update_zerobus_config(self, request: web.Request) -> web.Response:
         """Update ZeroBus configuration."""
         try:
@@ -552,6 +565,7 @@ class WebServer:
 
 
 
+    @require_permission(Permission.START_STOP)
     async def start_bridge(self, request: web.Request) -> web.Response:
         """Start protocol sources (bridge) in background."""
         try:
@@ -561,6 +575,7 @@ class WebServer:
             logger.error(f"Failed to start bridge: {e}", exc_info=True)
             return web.json_response({'status': 'error', 'message': str(e)}, status=500)
 
+    @require_permission(Permission.START_STOP)
     async def stop_bridge(self, request: web.Request) -> web.Response:
         """Stop protocol sources (bridge)."""
         try:
@@ -571,6 +586,7 @@ class WebServer:
             return web.json_response({'status': 'error', 'message': str(e)}, status=500)
 
 
+    @require_permission(Permission.START_STOP)
     async def start_zerobus(self, request: web.Request) -> web.Response:
         """Start ZeroBus streaming."""
         try:
@@ -580,6 +596,7 @@ class WebServer:
             logger.error(f"Failed to start ZeroBus: {e}", exc_info=True)
             return web.json_response({'status': 'error', 'message': str(e)}, status=500)
 
+    @require_permission(Permission.START_STOP)
     async def stop_zerobus(self, request: web.Request) -> web.Response:
         """Stop ZeroBus streaming."""
         try:
@@ -589,6 +606,7 @@ class WebServer:
             logger.error(f"Failed to stop ZeroBus: {e}", exc_info=True)
             return web.json_response({'status': 'error', 'message': str(e)}, status=500)
 
+    @require_permission(Permission.READ)
     async def get_metrics(self, request: web.Request) -> web.Response:
         """Get connector metrics."""
         try:
@@ -598,6 +616,7 @@ class WebServer:
             logger.error(f"Failed to get metrics: {e}", exc_info=True)
             return web.json_response({'status': 'error', 'message': str(e)}, status=500)
 
+    @require_permission(Permission.READ)
     async def get_status(self, request: web.Request) -> web.Response:
         """Get connector status."""
         try:
@@ -626,7 +645,18 @@ class WebServer:
         return web.json_response({'status': 'healthy'})
 
     async def serve_index(self, request: web.Request) -> web.Response:
-        """Serve web UI index page."""
+        """Serve web UI index page.
+
+        If authentication is enabled and user is not authenticated,
+        redirect to login page. Otherwise serve main UI.
+        """
+        # If auth is enabled, check if user is authenticated
+        if self.auth_manager:
+            user = request.get('user')
+            if not user:
+                # Not authenticated, redirect to login page
+                return web.HTTPFound('/static/login.html')
+
         html = """
 <!DOCTYPE html>
 <html>
@@ -951,3 +981,64 @@ class WebServer:
 </body>
 </html>        """
         return web.Response(text=html, content_type='text/html')
+
+    # Authentication Handlers (NIS2 compliance)
+
+    async def handle_login(self, request: web.Request) -> web.Response:
+        """Redirect to OAuth provider for authentication."""
+        if not self.auth_manager:
+            return web.json_response(
+                {'status': 'error', 'message': 'Authentication not enabled'},
+                status=503
+            )
+        return await self.auth_manager.handle_login(request)
+
+    async def handle_oauth_callback(self, request: web.Request) -> web.Response:
+        """Handle OAuth callback after user authentication."""
+        if not self.auth_manager:
+            return web.json_response(
+                {'status': 'error', 'message': 'Authentication not enabled'},
+                status=503
+            )
+        return await self.auth_manager.handle_oauth_callback(request)
+
+    async def handle_logout(self, request: web.Request) -> web.Response:
+        """Logout user and clear session."""
+        if not self.auth_manager:
+            return web.json_response(
+                {'status': 'error', 'message': 'Authentication not enabled'},
+                status=503
+            )
+        return await self.auth_manager.handle_logout(request)
+
+    async def get_auth_status(self, request: web.Request) -> web.Response:
+        """Get current authentication status and user info."""
+        user = request.get('user')
+        if not user:
+            return web.json_response({
+                'authenticated': False,
+                'user': None
+            })
+
+        return web.json_response({
+            'authenticated': True,
+            'user': user.to_dict()
+        })
+
+    async def get_user_permissions(self, request: web.Request) -> web.Response:
+        """Get permissions for current user."""
+        user = request.get('user')
+        if not user:
+            return web.json_response(
+                {'status': 'error', 'message': 'Not authenticated'},
+                status=401
+            )
+
+        return web.json_response({
+            'role': user.role.value,
+            'permissions': user.get_permissions()
+        })
+
+    async def get_role_info(self, request: web.Request) -> web.Response:
+        """Get information about all roles and permissions."""
+        return web.json_response(get_role_info())

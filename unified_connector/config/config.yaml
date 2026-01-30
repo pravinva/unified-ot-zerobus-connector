@@ -9,6 +9,56 @@ web_ui:
   host: 0.0.0.0
   port: 8082
   auto_open_browser: false
+  # NIS2 Compliance: Authentication & Authorization (Article 21.2(g))
+  authentication:
+    enabled: true
+    method: oauth2
+    require_mfa: true
+    oauth:
+      # Supported providers: azure, okta, google
+      provider: azure
+      client_id: ${env:OAUTH_CLIENT_ID}
+      client_secret: ${env:OAUTH_CLIENT_SECRET}
+      tenant_id: ${env:OAUTH_TENANT_ID}
+      redirect_uri: http://localhost:8082/login/callback
+      scopes:
+      - openid
+      - email
+      - profile
+    session:
+      secret_key: ${env:SESSION_SECRET_KEY}
+      max_age_seconds: 28800  # 8 hours
+      cookie_name: unified_connector_session
+      secure: false  # Set to true in production with HTTPS
+      httponly: true
+      samesite: lax
+    rbac:
+      enabled: true
+      # Role definitions (built-in)
+      roles:
+        admin:
+          permissions:
+          - read
+          - write
+          - configure
+          - manage_users
+          - start_stop
+          - delete
+        operator:
+          permissions:
+          - read
+          - write
+          - start_stop
+        viewer:
+          permissions:
+          - read
+      # Map OAuth groups to roles
+      role_mappings:
+        "OT-Admins": admin
+        "OT-Operators": operator
+        "OT-Viewers": viewer
+      # Default role for authenticated users with no group match
+      default_role: viewer
 discovery:
   enabled: true
   network:
