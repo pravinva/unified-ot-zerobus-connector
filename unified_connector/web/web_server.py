@@ -32,6 +32,7 @@ from unified_connector.web.input_validation import (
 )
 from unified_connector.web.correlation_middleware import correlation_id_middleware
 from unified_connector.core.structured_logging import get_structured_logger
+from unified_connector.core.tls_manager import create_ssl_context_from_config
 
 logger = logging.getLogger(__name__)
 
@@ -54,11 +55,13 @@ class WebServer:
         web_ui_config = config.get('web_ui', {})
         self.host = web_ui_config.get('host', '0.0.0.0')
         self.port = web_ui_config.get('port', 8080)
+        self.tls_config = web_ui_config.get('tls', {})
 
         self.app = None
         self.runner = None
         self.auth_manager = None
         self.security_logger = get_structured_logger()
+        self.ssl_context = None
 
     async def start(self):
         """Start web server."""
@@ -71,8 +74,8 @@ class WebServer:
         logger.info("✓ Correlation ID tracking enabled")
 
         # Setup security headers (NIS2 compliance - Article 21.2(a))
+        # Will be logged after TLS setup
         self.app.middlewares.append(security_headers_middleware)
-        log_security_headers_status()
 
         # Setup authentication (NIS2 compliance - Article 21.2(g))
         auth_config = self.config.get('web_ui', {}).get('authentication', {})
@@ -149,13 +152,31 @@ class WebServer:
         if static_dir.exists():
             self.app.router.add_static('/static/', path=str(static_dir), name='static')
 
+        # Setup TLS/SSL (NIS2 compliance - Article 21.2(h))
+        if self.tls_config.get('enabled', False):
+            try:
+                self.ssl_context = create_ssl_context_from_config(self.tls_config)
+                # Store HSTS config in app for security headers middleware
+                self.app.hsts_config = self.tls_config.get('hsts', {})
+                logger.info("✓ TLS/SSL enabled (NIS2 compliant)")
+            except Exception as e:
+                logger.error(f"Failed to setup TLS/SSL: {e}")
+                logger.warning("⚠️  Falling back to HTTP - NOT NIS2 compliant!")
+                self.ssl_context = None
+        else:
+            logger.warning("⚠️  TLS/SSL disabled - NOT NIS2 compliant!")
+
+        # Log security headers status
+        log_security_headers_status(https_enabled=self.ssl_context is not None)
+
         # Start server
         self.runner = web.AppRunner(self.app)
         await self.runner.setup()
-        site = web.TCPSite(self.runner, self.host, self.port)
+        site = web.TCPSite(self.runner, self.host, self.port, ssl_context=self.ssl_context)
         await site.start()
 
-        logger.info(f"Web UI started on http://{self.host}:{self.port}")
+        protocol = "https" if self.ssl_context else "http"
+        logger.info(f"Web UI started on {protocol}://{self.host}:{self.port}")
 
     async def stop(self):
         """Stop web server."""

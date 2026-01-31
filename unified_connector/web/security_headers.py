@@ -38,6 +38,9 @@ async def security_headers_middleware(
     """
     response = await handler(request)
 
+    # Check if HTTPS is enabled
+    is_https = request.scheme == 'https' or request.headers.get('X-Forwarded-Proto') == 'https'
+
     # Content Security Policy - Restrict resource loading
     # This prevents XSS attacks by controlling what resources can be loaded
     csp_directives = [
@@ -78,10 +81,23 @@ async def security_headers_middleware(
     ]
     response.headers['Permissions-Policy'] = ', '.join(permissions_directives)
 
-    # Strict-Transport-Security (HSTS) - Only enable in production with HTTPS
+    # Strict-Transport-Security (HSTS) - Enable when HTTPS is active
     # This header forces browsers to use HTTPS for all future requests
-    # Uncomment in production when HTTPS is configured:
-    # response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains; preload'
+    # NIS2 Compliance: Article 21.2(h) - Encryption of data in transit
+    if is_https:
+        # Get HSTS configuration from app config (if available)
+        hsts_config = getattr(request.app, 'hsts_config', {})
+        max_age = hsts_config.get('max_age', 31536000)  # 1 year default
+        include_subdomains = hsts_config.get('include_subdomains', True)
+        preload = hsts_config.get('preload', False)
+
+        hsts_value = f'max-age={max_age}'
+        if include_subdomains:
+            hsts_value += '; includeSubDomains'
+        if preload:
+            hsts_value += '; preload'
+
+        response.headers['Strict-Transport-Security'] = hsts_value
 
     # Cache-Control - Prevent caching of sensitive data
     if request.path.startswith('/api/'):
@@ -116,8 +132,13 @@ def get_security_config(config: dict) -> dict:
     })
 
 
-def log_security_headers_status():
-    """Log security headers configuration on startup."""
+def log_security_headers_status(https_enabled: bool = False):
+    """
+    Log security headers configuration on startup.
+
+    Args:
+        https_enabled: Whether HTTPS/TLS is enabled
+    """
     logger.info("✓ Security headers middleware enabled")
     logger.info("  - Content-Security-Policy: Enabled")
     logger.info("  - X-Frame-Options: DENY")
@@ -126,4 +147,8 @@ def log_security_headers_status():
     logger.info("  - Referrer-Policy: strict-origin-when-cross-origin")
     logger.info("  - Permissions-Policy: Enabled")
     logger.info("  - Cache-Control: Enabled for API routes")
-    logger.warning("  - Strict-Transport-Security: DISABLED (enable with HTTPS in production)")
+
+    if https_enabled:
+        logger.info("  - Strict-Transport-Security (HSTS): ENABLED (max-age=31536000)")
+    else:
+        logger.warning("  - Strict-Transport-Security (HSTS): DISABLED (HTTPS not enabled)")

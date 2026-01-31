@@ -20,7 +20,7 @@ web_ui:
       client_id: ${env:OAUTH_CLIENT_ID}
       client_secret: ${env:OAUTH_CLIENT_SECRET}
       tenant_id: ${env:OAUTH_TENANT_ID}
-      redirect_uri: http://localhost:8082/login/callback
+      redirect_uri: ${env:OAUTH_REDIRECT_URI:http://localhost:8082/login/callback}  # Change to https:// when TLS enabled
       scopes:
       - openid
       - email
@@ -59,6 +59,30 @@ web_ui:
         "OT-Viewers": viewer
       # Default role for authenticated users with no group match
       default_role: viewer
+  # NIS2 Compliance: TLS/SSL (Article 21.2(h) - Encryption in transit)
+  tls:
+    enabled: false  # Set to true to enable HTTPS
+    # Certificate options:
+    # 1. Auto-generate self-signed (for development)
+    # 2. Provide custom certificate paths (for production)
+    common_name: localhost
+    san_list:  # Subject Alternative Names (DNS names and IP addresses)
+      - localhost
+      - 127.0.0.1
+      - ::1
+      # Add your server hostname/IP:
+      # - unified-connector.example.com
+      # - 192.168.1.100
+    # Custom certificate paths (leave empty for auto-generated)
+    cert_file: ""  # Path to certificate file (e.g., /path/to/server.crt)
+    key_file: ""   # Path to private key file (e.g., /path/to/server.key)
+    # HSTS (HTTP Strict Transport Security) settings
+    hsts:
+      max_age: 31536000  # 1 year in seconds
+      include_subdomains: true
+      preload: false  # Set to true only if you want to be in HSTS preload list
+    # Client certificate authentication (mutual TLS)
+    require_client_cert: false
 discovery:
   enabled: true
   network:
