@@ -121,8 +121,32 @@ sources:
   enabled: true
 - name: mqtt-127-0-0-1-1883
   protocol: mqtt
-  endpoint: mqtt://127.0.0.1:1883
+  endpoint: mqtt://127.0.0.1:1883  # Use mqtts:// for TLS
   enabled: true
+  # MQTT TLS Configuration (NIS2 Article 21.2(h) - Encryption)
+  # Uncomment and configure for secure MQTT connections
+  # endpoint: mqtts://broker.example.com:8883  # Use mqtts:// scheme for TLS
+  # security:
+  #   enabled: true
+  #   tls_version: TLSv1_2  # TLSv1_2, TLSv1_3, or TLS (auto)
+  #   # CA certificate for server validation
+  #   ca_cert_path: /path/to/ca.crt
+  #   # Client certificate for mutual TLS (optional)
+  #   client_cert_path: /path/to/client.crt
+  #   client_key_path: /path/to/client.key
+  #   # Certificate validation settings
+  #   cert_required: true  # Require server certificate validation
+  #   check_hostname: true  # Verify hostname matches certificate
+  #   insecure: false  # Set true to skip validation (development only)
+  #   # Username/password authentication (works with or without TLS)
+  #   username: ${credential:mqtt.username}
+  #   password: ${credential:mqtt.password}
+  # # MQTT-specific settings
+  # topics: ["sensor/#", "telemetry/#"]  # Topics to subscribe to
+  # qos: 1  # Quality of Service (0, 1, or 2)
+  # client_id: unified-connector-mqtt
+  # clean_session: true
+  # keepalive: 60
 - name: opcua-127-0-0-1-4841
   protocol: opcua
   endpoint: opc.tcp://127.0.0.1:4841/ot-simulator/server/

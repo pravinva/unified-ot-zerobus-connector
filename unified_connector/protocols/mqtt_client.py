@@ -1,4 +1,11 @@
-"""MQTT protocol client implementation."""
+"""MQTT protocol client implementation with TLS/SSL support.
+
+Security Features (NIS2 Article 21.2(h) compliant):
+- TLS/SSL encryption (mqtts://)
+- Certificate-based authentication (mutual TLS)
+- CA certificate validation
+- Username/password authentication
+"""
 from __future__ import annotations
 
 import asyncio
@@ -16,6 +23,11 @@ from unified_connector.protocols.base import (
     ProtocolRecord,
     ProtocolTestResult,
     ProtocolType,
+)
+from unified_connector.protocols.mqtt_security import (
+    MQTTSecurityConfig,
+    MQTTSecurityManager,
+    create_security_config_from_dict,
 )
 
 
@@ -53,6 +65,10 @@ class MQTTClient(ProtocolClient):
         # Message parsing
         self.payload_format = config.get("payload_format", "auto")  # auto, json, string, bytes
         self.value_field = config.get("value_field", "value")  # For JSON payloads
+
+        # Security configuration (NIS2 compliance)
+        self.security_config = create_security_config_from_dict(config)
+        self.security_manager = MQTTSecurityManager(self.security_config)
 
         self._client: aiomqtt.Client | None = None
         self._messages_received = 0
@@ -101,31 +117,33 @@ class MQTTClient(ProtocolClient):
         return ProtocolType.MQTT
 
     async def connect(self) -> None:
-        """Establish MQTT connection."""
+        """Establish MQTT connection with TLS/SSL support."""
         if self._client is not None:
             return
 
-        tls_params = None
-        if self.use_tls:
-            import ssl
-            tls_params = aiomqtt.TLSParameters(
-                ca_certs=None,
-                certfile=None,
-                keyfile=None,
-                cert_reqs=ssl.CERT_REQUIRED,
-                tls_version=ssl.PROTOCOL_TLS,
-                ciphers=None,
-            )
+        # Validate security configuration
+        if not self.security_manager.validate_configuration():
+            raise ValueError("Invalid MQTT security configuration")
+
+        # Log security status
+        self.security_manager.log_security_status()
+
+        # Get TLS parameters if TLS is enabled
+        tls_context = None
+        if self.security_config.use_tls:
+            tls_context = self.security_manager.create_ssl_context()
+            import logging
+            logging.getLogger(__name__).info("✓ TLS/SSL enabled for MQTT connection")
 
         self._client = aiomqtt.Client(
             hostname=self.host,
             port=self.port,
-            username=self.username,
-            password=self.password,
+            username=self.security_config.username or self.username,
+            password=self.security_config.password or self.password,
             identifier=self.client_id,
             clean_session=self.clean_session,
             protocol=aiomqtt.ProtocolVersion.V311,
-            tls_params=tls_params,
+            tls_context=tls_context,
             keepalive=self.keepalive,
         )
 
