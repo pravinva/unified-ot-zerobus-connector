@@ -16,17 +16,22 @@ from unified_connector.core.config_loader import ConfigLoader
 from unified_connector.core.unified_bridge import UnifiedBridge
 from unified_connector.core.discovery import DiscoveryService
 from unified_connector.web.web_server import WebServer
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler('unified_connector.log')
-    ]
+from unified_connector.core.advanced_logging import (
+    LogRotationConfig,
+    configure_advanced_logging,
+    get_logging_manager
 )
 
+# Configure advanced logging with rotation and archiving (NIS2 compliance)
+log_config = LogRotationConfig(
+    max_bytes=100 * 1024 * 1024,     # 100 MB per file
+    backup_count=10,                  # Keep 10 backups
+    compress_backups=True,            # Compress rotated logs
+    archive_enabled=True,             # Enable archiving
+    retention_days=90,                # 90-day retention
+)
+
+logging_manager = configure_advanced_logging(log_config)
 logger = logging.getLogger(__name__)
 
 
@@ -58,6 +63,9 @@ class UnifiedConnector:
         # Background bridge task (so Web UI can start immediately)
         self._bridge_task: asyncio.Task | None = None
 
+        # Background log maintenance task
+        self._log_maintenance_task: asyncio.Task | None = None
+
         logger.info("✓ Unified Connector initialized")
 
     async def start(self):
@@ -82,6 +90,12 @@ class UnifiedConnector:
             logger.info("⏳ Bridge starting in background")
         else:
             logger.info("Bridge autostart disabled (web UI / diagnostics mode)")
+
+        # Start log maintenance task (NIS2 compliance - log retention)
+        self._log_maintenance_task = asyncio.create_task(
+            logging_manager.start_maintenance_task()
+        )
+        logger.info("✓ Log maintenance task started")
 
         logger.info("=" * 80)
         logger.info("✓ Unified Connector is running")
@@ -111,6 +125,13 @@ class UnifiedConnector:
 
         await self.bridge.stop()
 
+        # Stop log maintenance task
+        if self._log_maintenance_task is not None and not self._log_maintenance_task.done():
+            self._log_maintenance_task.cancel()
+            try:
+                await self._log_maintenance_task
+            except asyncio.CancelledError:
+                pass
 
         # Stop discovery
         await self.discovery.stop()
