@@ -127,6 +127,24 @@ sources:
   protocol: opcua
   endpoint: opc.tcp://127.0.0.1:4841/ot-simulator/server/
   enabled: true
+  # OPC-UA Security Configuration (NIS2 Article 21.2(h) - Encryption)
+  # Uncomment and configure for production deployments
+  # security:
+  #   enabled: true
+  #   security_policy: Basic256Sha256  # Basic256Sha256 or NoSecurity
+  #   security_mode: SignAndEncrypt    # Sign or SignAndEncrypt
+  #   # Client certificate (generate with: python scripts/generate_opcua_cert.py --generate)
+  #   client_cert_path: ~/.unified_connector/opcua_certs/client_cert.der
+  #   client_key_path: ~/.unified_connector/opcua_certs/client_key.pem
+  #   # Server certificate validation
+  #   server_cert_path: ~/.unified_connector/opcua_certs/trusted/server_cert.der
+  #   trust_all_certificates: false  # Set true for development only
+  #   # Username/password authentication (optional, works with or without certificates)
+  #   username: ${credential:opcua.username}
+  #   password: ${credential:opcua.password}
+  #   # Connection timeouts
+  #   timeout: 5.0
+  #   session_timeout_ms: 60000
 normalization:
   enabled: true
   path_template: '{site}/{area}/{line}/{equipment}/{signal_type}/{tag_name}'
