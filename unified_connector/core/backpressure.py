@@ -91,7 +91,7 @@ class BackpressureManager:
                    f"spool_size={self.max_spool_size_mb}MB, "
                    f"drop_policy={self.drop_policy.value}")
 
-    def _setup_directories(self):
+    def _setup_directories(self) -> None:
         """Create spool and DLQ directories."""
         if self.spool_enabled:
             self.spool_dir.mkdir(parents=True, exist_ok=True)
@@ -99,7 +99,7 @@ class BackpressureManager:
             logger.info(f"Spool directory: {self.spool_dir}")
             logger.info(f"DLQ directory: {self.dlq_dir}")
 
-    def _init_encryption(self):
+    def _init_encryption(self) -> None:
         """Initialize encryption for disk spool."""
         key_file = self.spool_dir.parent / "certs" / "spool_encryption.key"
 

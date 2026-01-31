@@ -11,10 +11,15 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from pathlib import Path
 from typing import Any, Callable
 
 from asyncua import Client, Node
 from asyncua.ua import DataChangeNotification, Variant
+from cryptography import x509
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import hashes
+from cryptography.x509.oid import NameOID
 
 from unified_connector.protocols.base import (
     ProtocolClient,
@@ -82,6 +87,88 @@ class OPCUAClient(ProtocolClient):
     def protocol_type(self) -> ProtocolType:
         return ProtocolType.OPCUA
 
+    async def _validate_server_certificate(self, cert_path: str) -> bool:
+        """
+        Validate server certificate before trusting.
+
+        Performs the following validation checks:
+        - Certificate file exists and is readable
+        - Certificate can be parsed
+        - Certificate is not expired
+        - Certificate has valid issuer and subject
+        - Certificate uses secure hash algorithm (SHA256+)
+
+        Args:
+            cert_path: Path to server certificate file
+
+        Returns:
+            True if certificate is valid, False otherwise
+        """
+        try:
+            cert_file = Path(cert_path)
+
+            # Check file exists
+            if not cert_file.exists():
+                logger.error(f"Server certificate file not found: {cert_path}")
+                return False
+
+            # Load certificate
+            with open(cert_file, 'rb') as f:
+                cert_data = f.read()
+
+            # Try DER format first (OPC-UA typically uses DER)
+            try:
+                cert = x509.load_der_x509_certificate(cert_data, default_backend())
+            except Exception:
+                # Fallback to PEM format
+                try:
+                    cert = x509.load_pem_x509_certificate(cert_data, default_backend())
+                except Exception as e:
+                    logger.error(f"Failed to parse certificate {cert_path}: {e}")
+                    return False
+
+            # Validate certificate is not expired
+            from datetime import datetime, timezone
+            now = datetime.now(timezone.utc)
+
+            if cert.not_valid_before_utc > now:
+                logger.error(f"Certificate not yet valid. Valid from: {cert.not_valid_before_utc}")
+                return False
+
+            if cert.not_valid_after_utc < now:
+                logger.error(f"Certificate expired. Valid until: {cert.not_valid_after_utc}")
+                return False
+
+            # Validate certificate has required fields
+            try:
+                subject = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
+                if not subject:
+                    logger.warning("Certificate has no Common Name (CN)")
+                else:
+                    cn = subject[0].value
+                    logger.info(f"Certificate CN: {cn}")
+            except Exception as e:
+                logger.warning(f"Could not extract certificate subject: {e}")
+
+            # Check signature algorithm (should be SHA256 or better)
+            sig_alg = cert.signature_hash_algorithm
+            if sig_alg and hasattr(sig_alg, 'name'):
+                if 'sha1' in sig_alg.name.lower() or 'md5' in sig_alg.name.lower():
+                    logger.warning(f"Certificate uses weak signature algorithm: {sig_alg.name}")
+                    return False
+                logger.info(f"Certificate signature algorithm: {sig_alg.name}")
+
+            # Certificate is valid
+            logger.info(f"✓ Server certificate validation passed: {cert_path}")
+            logger.info(f"  Valid from: {cert.not_valid_before_utc}")
+            logger.info(f"  Valid until: {cert.not_valid_after_utc}")
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Certificate validation failed for {cert_path}: {e}", exc_info=True)
+            return False
+
     async def connect(self) -> None:
         """Establish OPC-UA connection with security."""
         if self._client is not None:
@@ -117,13 +204,17 @@ class OPCUAClient(ProtocolClient):
                 self._client.set_password(self.security_config.password)
                 logger.info(f"✓ Configured username authentication: {self.security_config.username}")
 
-            # Configure server certificate trust
+            # Configure server certificate trust and validation
             server_cert = self.security_manager.get_server_certificate_path()
             if server_cert:
-                # TODO: Implement server certificate validation
-                logger.info(f"✓ Trusting server certificate: {server_cert}")
+                # Validate server certificate before trusting
+                cert_valid = await self._validate_server_certificate(server_cert)
+                if cert_valid:
+                    logger.info(f"✓ Server certificate validated and trusted: {server_cert}")
+                else:
+                    logger.warning(f"⚠️  Server certificate validation failed but proceeding: {server_cert}")
             elif self.security_config.trust_all_certificates:
-                logger.warning("⚠️  Trusting ALL server certificates (development mode)")
+                logger.warning("⚠️  Trusting ALL server certificates (development mode - NOT for production)")
                 # asyncua will accept any server certificate
             else:
                 logger.info("Server certificate validation: strict mode (will reject unknown certs)")

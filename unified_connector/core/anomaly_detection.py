@@ -12,6 +12,7 @@ Features:
 NIS2 Compliance: Article 21.2(f) - Continuous Monitoring
 """
 
+import asyncio
 import json
 import logging
 import time
@@ -589,7 +590,8 @@ class AnomalyDetectionSystem:
     def __init__(
         self,
         baseline_dir: Path = Path('baselines'),
-        anomaly_dir: Path = Path('anomalies')
+        anomaly_dir: Path = Path('anomalies'),
+        enable_incident_integration: bool = True
     ):
         """
         Initialize anomaly detection system.
@@ -597,10 +599,13 @@ class AnomalyDetectionSystem:
         Args:
             baseline_dir: Directory for baselines
             anomaly_dir: Directory for anomalies
+            enable_incident_integration: Enable automatic incident creation for CRITICAL/HIGH anomalies
         """
         self.monitor = BehavioralMonitor(baseline_dir)
         self.manager = AnomalyManager(anomaly_dir)
         self.logger = logging.getLogger(__name__)
+        self.enable_incident_integration = enable_incident_integration
+        self._incident_manager = None
 
     async def process_event(self, event: Dict[str, Any]):
         """
@@ -623,9 +628,83 @@ class AnomalyDetectionSystem:
         if anomaly:
             self.manager.add_anomaly(anomaly)
 
-            # TODO: Integrate with incident response
-            # if anomaly.severity in (AnomalySeverity.CRITICAL, AnomalySeverity.HIGH):
-            #     await create_incident_from_anomaly(anomaly)
+            # Integrate with incident response for CRITICAL/HIGH anomalies
+            if self.enable_incident_integration and anomaly.severity in (AnomalySeverity.CRITICAL, AnomalySeverity.HIGH):
+                await self._create_incident_from_anomaly(anomaly)
+
+    async def _create_incident_from_anomaly(self, anomaly: Anomaly) -> None:
+        """
+        Create incident from detected anomaly.
+
+        Args:
+            anomaly: Detected anomaly
+
+        Creates incidents for CRITICAL and HIGH severity anomalies to enable
+        automated response and notification workflows.
+        """
+        try:
+            # Lazy import to avoid circular dependency
+            if self._incident_manager is None:
+                from unified_connector.core.incident_response import (
+                    get_incident_manager,
+                    IncidentAlert,
+                    IncidentSeverity
+                )
+                self._incident_manager = get_incident_manager()
+
+            # Map anomaly severity to incident severity
+            severity_map = {
+                AnomalySeverity.CRITICAL: IncidentSeverity.CRITICAL,
+                AnomalySeverity.HIGH: IncidentSeverity.HIGH,
+                AnomalySeverity.MEDIUM: IncidentSeverity.MEDIUM,
+                AnomalySeverity.LOW: IncidentSeverity.LOW,
+            }
+
+            # Map anomaly type to incident category
+            category_map = {
+                AnomalyType.AUTHENTICATION_ANOMALY: "authentication",
+                AnomalyType.TRAFFIC_ANOMALY: "data_exfiltration",
+                AnomalyType.PERFORMANCE_ANOMALY: "performance",
+                AnomalyType.BEHAVIORAL_ANOMALY: "suspicious_activity",
+                AnomalyType.GEOGRAPHIC_ANOMALY: "authentication",
+                AnomalyType.TIME_ANOMALY: "suspicious_activity",
+                AnomalyType.VOLUME_ANOMALY: "data_exfiltration",
+            }
+
+            # Create incident alert from anomaly
+            alert = IncidentAlert(
+                alert_type=category_map.get(anomaly.anomaly_type, "anomaly_detection"),
+                severity=severity_map[anomaly.severity],
+                source="anomaly_detection",
+                title=f"{anomaly.anomaly_type.value.replace('_', ' ').title()} Detected",
+                description=anomaly.description,
+                details={
+                    'anomaly_id': anomaly.anomaly_id,
+                    'metric_name': anomaly.metric_name,
+                    'value': anomaly.value,
+                    'z_score': anomaly.z_score,
+                    'baseline_mean': anomaly.baseline_mean,
+                    'baseline_std': anomaly.baseline_std,
+                    **anomaly.details
+                },
+                timestamp=anomaly.detected_at
+            )
+
+            # Create incident
+            incident = self._incident_manager.create_incident(alert)
+
+            self.logger.info(
+                f"Created incident {incident.incident_id} from anomaly {anomaly.anomaly_id} "
+                f"(severity: {anomaly.severity.value})"
+            )
+
+            # Link anomaly to incident
+            anomaly.details['incident_id'] = incident.incident_id
+            self.manager.anomalies[anomaly.anomaly_id] = anomaly
+            self.manager._save_anomaly(anomaly)
+
+        except Exception as e:
+            self.logger.error(f"Failed to create incident from anomaly {anomaly.anomaly_id}: {e}", exc_info=True)
 
     def get_baseline_status(self) -> Dict[str, Any]:
         """Get baseline learning status."""
@@ -640,6 +719,7 @@ class AnomalyDetectionSystem:
         return {
             'baseline_status': self.get_baseline_status(),
             'anomaly_summary': self.manager.get_summary(),
+            'incident_integration': self.enable_incident_integration,
         }
 
 

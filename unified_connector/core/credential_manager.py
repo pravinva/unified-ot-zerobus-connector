@@ -66,7 +66,7 @@ class CredentialManager:
         # Load or generate salt
         self._load_or_create_salt()
 
-    def _load_or_create_salt(self):
+    def _load_or_create_salt(self) -> bytes:
         """Load existing salt or generate new one."""
         salt_file = self.credentials_dir / "salt.txt"
 

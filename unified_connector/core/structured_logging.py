@@ -144,8 +144,8 @@ class StructuredLogger:
         event_category: str,
         user: Optional[str] = None,
         source_ip: Optional[str] = None,
-        **extra_fields
-    ):
+        **extra_fields: Any
+    ) -> None:
         """
         Log a security event in structured format.
 
@@ -168,7 +168,7 @@ class StructuredLogger:
         log_level = getattr(logging, level.upper(), logging.INFO)
         self.logger.log(log_level, json_log)
 
-    def auth_success(self, user: str, source_ip: str, mfa: bool = False, **extra):
+    def auth_success(self, user: str, source_ip: str, mfa: bool = False, **extra: Any) -> None:
         """Log successful authentication."""
         self.log_security_event(
             'INFO',
@@ -180,7 +180,7 @@ class StructuredLogger:
             **extra
         )
 
-    def auth_failure(self, user: str, source_ip: str, reason: str, **extra):
+    def auth_failure(self, user: str, source_ip: str, reason: str, **extra: Any) -> None:
         """Log failed authentication."""
         self.log_security_event(
             'WARNING',
@@ -192,7 +192,7 @@ class StructuredLogger:
             **extra
         )
 
-    def authz_denied(self, user: str, action: str, resource: str, required_permission: str, **extra):
+    def authz_denied(self, user: str, action: str, resource: str, required_permission: str, **extra: Any) -> None:
         """Log authorization denial."""
         self.log_security_event(
             'WARNING',
@@ -205,7 +205,7 @@ class StructuredLogger:
             **extra
         )
 
-    def validation_failed(self, user: str, action: str, reason: str, input_data: str, **extra):
+    def validation_failed(self, user: str, action: str, reason: str, input_data: str, **extra: Any) -> None:
         """Log input validation failure (potential attack)."""
         self.log_security_event(
             'WARNING',
@@ -218,7 +218,7 @@ class StructuredLogger:
             **extra
         )
 
-    def injection_attempt(self, user: str, source_ip: str, payload: str, attack_type: str, **extra):
+    def injection_attempt(self, user: str, source_ip: str, payload: str, attack_type: str, **extra: Any) -> None:
         """Log injection attack attempt (critical security event)."""
         self.log_security_event(
             'CRITICAL',
