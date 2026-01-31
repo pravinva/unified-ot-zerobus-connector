@@ -16,11 +16,19 @@ from typing import Any, Dict, Optional
 
 from aiohttp import web
 import aiohttp_cors
+from typing import Callable
 
 # Authentication and authorization (NIS2 compliance)
 from unified_connector.web.auth import AuthenticationManager, auth_middleware
 from unified_connector.web.rbac import (
     require_permission, require_role, Permission, Role, get_role_info
+)
+from unified_connector.web.security_headers import (
+    security_headers_middleware, log_security_headers_status
+)
+from unified_connector.web.input_validation import (
+    validate_source_config, validate_source_name, validate_protocol,
+    validate_host, validate_port, ValidationError
 )
 
 logger = logging.getLogger(__name__)
@@ -55,7 +63,11 @@ class WebServer:
 
         static_dir = Path(__file__).parent / "static"
 
-        # Setup authentication (NIS2 compliance)
+        # Setup security headers (NIS2 compliance - Article 21.2(a))
+        self.app.middlewares.append(security_headers_middleware)
+        log_security_headers_status()
+
+        # Setup authentication (NIS2 compliance - Article 21.2(g))
         auth_config = self.config.get('web_ui', {}).get('authentication', {})
         if auth_config.get('enabled', False):
             self.auth_manager = AuthenticationManager(auth_config)
@@ -190,6 +202,17 @@ class WebServer:
                     status=400
                 )
 
+            # Validate input (NIS2 compliance - prevent injection attacks)
+            try:
+                protocol = validate_protocol(protocol)
+                host = validate_host(host)
+                port = validate_port(port)
+            except ValidationError as e:
+                return web.json_response(
+                    {'status': 'error', 'message': f'Validation error: {str(e)}'},
+                    status=400
+                )
+
             try:
                 from unified_connector.core.discovery import ProtocolType
                 protocol_enum = ProtocolType(str(protocol))
@@ -214,14 +237,20 @@ class WebServer:
         try:
             data = await request.json()
 
-            # Validate required fields
-            required = ['name', 'protocol', 'endpoint']
-            for field in required:
-                if field not in data:
-                    return web.json_response(
-                        {'status': 'error', 'message': f'Missing required field: {field}'},
-                        status=400
-                    )
+            # Validate and sanitize input (NIS2 compliance - prevent injection attacks)
+            try:
+                data = validate_source_config(data)
+            except ValidationError as e:
+                logger.warning(f"Source validation failed: {e}", extra={
+                    'event_type': 'security',
+                    'action': 'add_source',
+                    'result': 'validation_failed',
+                    'user': request.get('user', {}).email if request.get('user') else 'unknown'
+                })
+                return web.json_response(
+                    {'status': 'error', 'message': f'Validation error: {str(e)}'},
+                    status=400
+                )
 
             # Add to bridge
             await self.bridge.add_source(
@@ -270,7 +299,26 @@ class WebServer:
         """Update data source configuration."""
         try:
             source_name = request.match_info['name']
+
+            # Validate source name from URL
+            try:
+                source_name = validate_source_name(source_name)
+            except ValidationError as e:
+                return web.json_response(
+                    {'status': 'error', 'message': f'Invalid source name: {str(e)}'},
+                    status=400
+                )
+
             data = await request.json()
+
+            # Validate and sanitize input
+            try:
+                data = validate_source_config(data)
+            except ValidationError as e:
+                return web.json_response(
+                    {'status': 'error', 'message': f'Validation error: {str(e)}'},
+                    status=400
+                )
 
             # Remove and re-add source
             await self.bridge.remove_source(source_name)
