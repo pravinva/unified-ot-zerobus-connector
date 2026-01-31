@@ -30,6 +30,8 @@ from unified_connector.web.input_validation import (
     validate_source_config, validate_source_name, validate_protocol,
     validate_host, validate_port, ValidationError
 )
+from unified_connector.web.correlation_middleware import correlation_id_middleware
+from unified_connector.core.structured_logging import get_structured_logger
 
 logger = logging.getLogger(__name__)
 
@@ -56,12 +58,17 @@ class WebServer:
         self.app = None
         self.runner = None
         self.auth_manager = None
+        self.security_logger = get_structured_logger()
 
     async def start(self):
         """Start web server."""
         self.app = web.Application()
 
         static_dir = Path(__file__).parent / "static"
+
+        # Setup correlation ID tracking (NIS2 compliance - Article 21.2(b))
+        self.app.middlewares.append(correlation_id_middleware)
+        logger.info("✓ Correlation ID tracking enabled")
 
         # Setup security headers (NIS2 compliance - Article 21.2(a))
         self.app.middlewares.append(security_headers_middleware)
@@ -241,12 +248,16 @@ class WebServer:
             try:
                 data = validate_source_config(data)
             except ValidationError as e:
-                logger.warning(f"Source validation failed: {e}", extra={
-                    'event_type': 'security',
-                    'action': 'add_source',
-                    'result': 'validation_failed',
-                    'user': request.get('user', {}).email if request.get('user') else 'unknown'
-                })
+                # Log validation failure with structured logging
+                user = request.get('user')
+                self.security_logger.validation_failed(
+                    user=user.email if user else 'anonymous',
+                    action='add_source',
+                    reason=str(e),
+                    input_data=str(data),
+                    component='web_server',
+                    source_ip=request.remote
+                )
                 return web.json_response(
                     {'status': 'error', 'message': f'Validation error: {str(e)}'},
                     status=400
