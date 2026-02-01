@@ -770,12 +770,10 @@ def get_styles_html() -> str:
         @keyframes slideIn {
             from {
                 opacity: 0;
-                transform: translateY(-10px);
                 background: rgba(16, 185, 129, 0.2);
             }
             to {
                 opacity: 1;
-                transform: translateY(0);
                 background: transparent;
             }
         }
@@ -1861,8 +1859,8 @@ def get_body_html() -> str:
                         <button class="btn-test" onclick="clearRawStream()">Clear</button>
                     </div>
                 </div>
-                <div id="raw-stream-container" style="max-height: 500px; overflow-y: auto; font-family: 'Monaco', 'Courier New', monospace; font-size: 12px; background: #1E1E1E; color: #D4D4D4; padding: 16px; border-radius: 6px; margin-top: 16px;">
-                    <div id="raw-stream-content" style="white-space: pre-wrap; word-wrap: break-word;">
+                <div id="raw-stream-container" style="max-height: 500px; overflow-y: auto; overflow-x: hidden; font-family: 'Monaco', 'Courier New', monospace; font-size: 12px; background: #1E1E1E; color: #D4D4D4; padding: 16px; border-radius: 6px; margin-top: 16px;">
+                    <div id="raw-stream-content" style="white-space: pre-wrap; word-wrap: break-word; width: 100%;">
                         <div style="color: #6B7280; text-align: center; padding: 32px;">
                             Click "Start Stream" to begin viewing live raw sensor data
                         </div>
@@ -3839,33 +3837,33 @@ def get_scripts_html() -> str:
                     let output = '';
                     result.data.forEach((record) => {
                         const timestamp = new Date(record.timestamp).toLocaleTimeString();
-                        output += `<div class="stream-record stream-record-new" style="margin-bottom: 12px; padding: 12px; background: #2D2D2D; border-left: 3px solid ${getProtocolColor(record.protocol)}; border-radius: 4px;">`;
+                        output += `<div class="stream-record stream-record-new" style="margin-bottom: 12px; padding: 12px; background: #2D2D2D; border-left: 3px solid ${getProtocolColor(record.protocol)}; border-radius: 4px; width: 100%; box-sizing: border-box;">`;
                         output += `<div style="display: flex; justify-content: space-between; margin-bottom: 8px;">`;
                         output += `<span style="color: ${getProtocolColor(record.protocol)}; font-weight: 600;">${record.protocol.toUpperCase()}</span>`;
                         output += `<span style="color: #9CA3AF; font-size: 11px;">${timestamp}</span>`;
                         output += `</div>`;
-                        output += `<div style="color: #10B981; font-size: 13px; margin-bottom: 4px;">`;
+                        output += `<div style="color: #10B981; font-size: 13px; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">`;
                         output += `${record.industry}/${record.sensor_name}`;
                         output += `</div>`;
                         output += `<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px;">`;
                         output += `<span style="color: #6B7280;">Value:</span>`;
-                        output += `<span style="color: #00A9E0; font-weight: 600;">${typeof record.value === 'number' ? record.value.toFixed(2) : record.value} ${record.unit || ''}</span>`;
+                        output += `<span style="color: #00A9E0; font-weight: 600; overflow: hidden; text-overflow: ellipsis;">${typeof record.value === 'number' ? record.value.toFixed(2) : record.value} ${record.unit || ''}</span>`;
                         output += `<span style="color: #6B7280;">Type:</span>`;
-                        output += `<span style="color: #D4D4D4;">${record.sensor_type || 'N/A'}</span>`;
+                        output += `<span style="color: #D4D4D4; overflow: hidden; text-overflow: ellipsis;">${record.sensor_type || 'N/A'}</span>`;
                         if (record.plc_name) {
                             output += `<span style="color: #6B7280;">PLC:</span>`;
-                            output += `<span style="color: #D4D4D4;">${record.plc_name}</span>`;
+                            output += `<span style="color: #D4D4D4; overflow: hidden; text-overflow: ellipsis;">${record.plc_name}</span>`;
                         }
                         // Protocol-specific fields
                         if (record.protocol === 'opcua' && record.node_id) {
                             output += `<span style="color: #6B7280;">Node ID:</span>`;
-                            output += `<span style="color: #D4D4D4; font-family: monospace; font-size: 11px;">${record.node_id}</span>`;
+                            output += `<span style="color: #D4D4D4; font-family: monospace; font-size: 11px; overflow: hidden; text-overflow: ellipsis;">${record.node_id}</span>`;
                         } else if (record.protocol === 'mqtt' && record.topic) {
                             output += `<span style="color: #6B7280;">Topic:</span>`;
-                            output += `<span style="color: #D4D4D4; font-family: monospace; font-size: 11px;">${record.topic}</span>`;
+                            output += `<span style="color: #D4D4D4; font-family: monospace; font-size: 11px; overflow: hidden; text-overflow: ellipsis;">${record.topic}</span>`;
                         } else if (record.protocol === 'modbus' && record.register_address !== undefined) {
                             output += `<span style="color: #6B7280;">Register:</span>`;
-                            output += `<span style="color: #D4D4D4;">${record.register_address} (${record.register_type})</span>`;
+                            output += `<span style="color: #D4D4D4; overflow: hidden; text-overflow: ellipsis;">${record.register_address} (${record.register_type})</span>`;
                         }
                         output += `</div></div>`;
                     });

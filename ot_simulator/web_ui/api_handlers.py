@@ -1703,8 +1703,8 @@ class APIHandlers:
                         if industry_filter and industry != industry_filter.lower():
                             continue
 
-                        # Get current value
-                        value = sensor_sim.current_value if hasattr(sensor_sim, 'current_value') else sensor_sim.update()
+                        # Get current value (update to get fresh simulated value)
+                        value = sensor_sim.update()
 
                         # Get PLC information if available
                         plc_name = ""
