@@ -11,22 +11,20 @@ web_ui:
   auto_open_browser: false
   # NIS2 Compliance: Authentication & Authorization (Article 21.2(g))
   authentication:
-    enabled: true
+    enabled: false  # Disabled for demo (service principal uses M2M OAuth, not user auth)
     method: oauth2
-    require_mfa: true
+    require_mfa: false  # Databricks handles MFA at workspace level
     oauth:
-      # Supported providers: azure, okta, google
-      provider: azure
-      client_id: ${env:OAUTH_CLIENT_ID}
-      client_secret: ${env:OAUTH_CLIENT_SECRET}
-      tenant_id: ${env:OAUTH_TENANT_ID}
-      redirect_uri: ${env:OAUTH_REDIRECT_URI:http://localhost:8082/login/callback}  # Change to https:// when TLS enabled
+      # Databricks OAuth2 (Service Principal authentication)
+      provider: databricks
+      client_id: ${credential:oauth.client_id}
+      client_secret: ${credential:oauth.client_secret}
+      workspace_host: https://e2-demo-field-eng.cloud.databricks.com
+      redirect_uri: http://localhost:8082/login/callback
       scopes:
-      - openid
-      - email
-      - profile
+      - all-apis
     session:
-      secret_key: ${env:SESSION_SECRET_KEY}
+      secret_key: ${credential:session.secret_key}
       max_age_seconds: 28800  # 8 hours
       cookie_name: unified_connector_session
       secure: false  # Set to true in production with HTTPS

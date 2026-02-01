@@ -27,7 +27,13 @@ ot_simulator/certs/*.key
 .env.*.local
 *.enc
 credentials.enc
+salt.txt
 session_keys.txt
+
+# Master passwords and OAuth credentials
+**/MASTER_PASSWORD.txt
+**/oauth_setup*.md
+oauth_setup_complete.md
 
 # Authentication tokens and OAuth state
 oauth_state/

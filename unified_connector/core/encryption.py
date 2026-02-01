@@ -18,7 +18,7 @@ from typing import Optional, Dict, Any
 from pathlib import Path
 from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.backends import default_backend
 
 logger = logging.getLogger(__name__)
@@ -130,12 +130,11 @@ class EncryptionManager:
         try:
             salt = self._get_or_create_salt()
 
-            kdf = PBKDF2(
+            kdf = PBKDF2HMAC(
                 algorithm=hashes.SHA256(),
                 length=32,
                 salt=salt,
-                iterations=480000,  # OWASP 2023 recommendation
-                backend=default_backend()
+                iterations=480000  # OWASP 2023 recommendation
             )
 
             key = kdf.derive(password.encode('utf-8'))

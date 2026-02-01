@@ -18,8 +18,17 @@ from urllib.parse import urlencode
 from aiohttp import web
 from aiohttp_session import setup as setup_session, get_session, new_session
 from aiohttp_session.cookie_storage import EncryptedCookieStorage
-from authlib.integrations.aiohttp_client import OAuth
+try:
+    from authlib.integrations.aiohttp_client import OAuth
+except ImportError:
+    # authlib 1.6+ doesn't have aiohttp_client integration
+    # For testing purposes, we'll use a placeholder
+    # In production, consider using authlib.integrations.base_client
+    OAuth = None
 from cryptography import fernet
+
+# Import custom Databricks OAuth client
+from unified_connector.web.databricks_oauth import DatabricksOAuthClient, generate_state
 
 logger = logging.getLogger(__name__)
 
@@ -119,14 +128,50 @@ class AuthenticationManager:
 
         # Set up session management with encrypted cookies
         secret_key = self.session_secret
+        logger.info(f"Session secret loaded: {type(secret_key)}, length={len(str(secret_key)) if secret_key else 0}")
         if not secret_key:
             logger.error("Session secret key not configured! Set SESSION_SECRET_KEY environment variable.")
             raise ValueError("Session secret key required for authentication")
 
-        # Convert secret key to Fernet key format
-        fernet_key = fernet.Fernet.generate_key()  # In production, derive from secret_key
-        storage = EncryptedCookieStorage(fernet_key, max_age=self.session_max_age)
+        # Convert secret key to Fernet key format (32 url-safe base64-encoded bytes)
+        import base64
+        import hashlib
+        # Derive Fernet key from session secret using SHA256
+        key_material = hashlib.sha256(secret_key.encode('utf-8')).digest()
+        fernet_key = base64.urlsafe_b64encode(key_material)
+        logger.info(f"Fernet key derived: {len(fernet_key)} bytes")
+
+        # Create Fernet cipher instance (EncryptedCookieStorage can accept Fernet object directly)
+        fernet_cipher = fernet.Fernet(fernet_key)
+        logger.info("✓ Fernet cipher created successfully")
+
+        storage = EncryptedCookieStorage(fernet_cipher, max_age=self.session_max_age)
         setup_session(app, storage)
+
+        # Handle Databricks provider with custom implementation
+        if self.provider == 'databricks':
+            workspace_host = self.oauth_config.get('workspace_host', '')
+            if not workspace_host:
+                raise ValueError("workspace_host required for Databricks OAuth")
+
+            self.oauth_client = DatabricksOAuthClient(
+                client_id=self.client_id,
+                client_secret=self.client_secret,
+                workspace_host=workspace_host,
+                redirect_uri=self.redirect_uri,
+                scopes=self.scopes
+            )
+            # Store auth manager in app
+            app['auth_manager'] = self
+            logger.info(f"✓ Databricks OAuth configured: workspace={workspace_host}")
+            return
+
+        # For other providers, check if OAuth is available
+        if OAuth is None:
+            logger.error("OAuth integration not available (authlib.integrations.aiohttp_client not found)")
+            logger.error("Authentication cannot be set up for non-Databricks providers.")
+            logger.error("Either use provider='databricks' or install authlib with aiohttp support.")
+            raise ImportError("authlib.integrations.aiohttp_client not available")
 
         # Set up OAuth2
         self.oauth = OAuth()
@@ -190,6 +235,22 @@ class AuthenticationManager:
         Returns:
             Redirect response to OAuth provider
         """
+        # For Databricks OAuth, use custom client
+        if self.provider == 'databricks':
+            # Generate state for CSRF protection
+            state = generate_state()
+
+            # Store state in session
+            session = await new_session(request)
+            session['oauth_state'] = state
+
+            # Get authorization URL
+            auth_url = self.oauth_client.get_authorization_url(state)
+            logger.info(f"Redirecting to Databricks OAuth: {auth_url}")
+
+            return web.HTTPFound(auth_url)
+
+        # For other providers (if OAuth available)
         redirect_uri = self.redirect_uri
         return await self.oauth_client.authorize_redirect(request, redirect_uri)
 
@@ -204,18 +265,58 @@ class AuthenticationManager:
             Redirect to home page or error page
         """
         try:
-            # Exchange authorization code for token
-            token = await self.oauth_client.authorize_access_token(request)
+            # For Databricks OAuth
+            if self.provider == 'databricks':
+                # Get authorization code and state from query params
+                code = request.query.get('code')
+                state = request.query.get('state')
 
-            # Parse user info from token
-            userinfo = token.get('userinfo')
-            if not userinfo:
-                # Fetch userinfo if not in token
-                userinfo = await self.oauth_client.userinfo(token=token)
+                if not code:
+                    return web.Response(text="Missing authorization code", status=400)
 
-            user_email = userinfo.get('email') or userinfo.get('preferred_username') or userinfo.get('upn')
-            user_name = userinfo.get('name', user_email)
-            user_groups = userinfo.get('groups', [])
+                # Verify state (CSRF protection)
+                session = await get_session(request)
+                expected_state = session.get('oauth_state')
+                if state != expected_state:
+                    logger.warning(f"OAuth state mismatch: expected={expected_state}, got={state}")
+                    return web.Response(text="Invalid OAuth state (CSRF check failed)", status=403)
+
+                # Exchange code for token
+                token_data = await self.oauth_client.exchange_code_for_token(code)
+                if not token_data:
+                    return web.Response(text="Failed to exchange authorization code", status=500)
+
+                access_token = token_data.get('access_token')
+                id_token = token_data.get('id_token')
+
+                # Get user info
+                userinfo = await self.oauth_client.get_user_info(access_token)
+                if not userinfo:
+                    # Fallback: decode ID token
+                    if id_token:
+                        userinfo = self.oauth_client.decode_id_token(id_token)
+
+                if not userinfo:
+                    return web.Response(text="Failed to get user information", status=500)
+
+                user_email = userinfo.get('email') or userinfo.get('preferred_username') or userinfo.get('sub')
+                user_name = userinfo.get('name', user_email)
+                user_groups = userinfo.get('groups', [])
+
+            else:
+                # For other providers (if OAuth available)
+                # Exchange authorization code for token
+                token = await self.oauth_client.authorize_access_token(request)
+
+                # Parse user info from token
+                userinfo = token.get('userinfo')
+                if not userinfo:
+                    # Fetch userinfo if not in token
+                    userinfo = await self.oauth_client.userinfo(token=token)
+
+                user_email = userinfo.get('email') or userinfo.get('preferred_username') or userinfo.get('upn')
+                user_name = userinfo.get('name', user_email)
+                user_groups = userinfo.get('groups', [])
 
             if not user_email:
                 logger.error("No email in OAuth token")
