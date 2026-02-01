@@ -121,16 +121,18 @@ sources:
   endpoint: opc.tcp://127.0.0.1:4841
   enabled: true
   security_mode: None
-  normalization_enabled: false
+  normalization_enabled: true
   subscription_mode: true  # Use subscription (server push) instead of polling
 - name: modbus-127-0-0-1-5020
   protocol: modbus
   endpoint: modbus://127.0.0.1:5020
   enabled: true
+  normalization_enabled: true
 - name: mqtt-127-0-0-1-1883
   protocol: mqtt
   endpoint: mqtt://127.0.0.1:1883  # Use mqtts:// for TLS
   enabled: true
+  normalization_enabled: true
   # MQTT TLS Configuration (NIS2 Article 21.2(h) - Encryption)
   # Uncomment and configure for secure MQTT connections
   # endpoint: mqtts://broker.example.com:8883  # Use mqtts:// scheme for TLS
@@ -159,6 +161,7 @@ sources:
   protocol: opcua
   endpoint: opc.tcp://127.0.0.1:4841/ot-simulator/server/
   enabled: true
+  normalization_enabled: true
   subscription_mode: true  # Use subscription (server push) instead of polling
   # OPC-UA Security Configuration (NIS2 Article 21.2(h) - Encryption)
   # Uncomment and configure for production deployments
