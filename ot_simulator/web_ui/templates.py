@@ -981,31 +981,6 @@ def get_styles_html() -> str:
         }
 
         /* OPC-UA Browser Panel */
-        .opcua-browser-button {
-            position: fixed;
-            bottom: 90px;
-            right: 24px;
-            background: linear-gradient(135deg, #00A9E0 0%, #0088C7 100%);
-            color: white;
-            border: none;
-            padding: 16px 24px;
-            border-radius: 50px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            box-shadow: 0 8px 32px rgba(0, 169, 224, 0.4);
-            transition: all 0.3s;
-            z-index: 1000;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .opcua-browser-button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 12px 40px rgba(0, 169, 224, 0.6);
-        }
-
         .opcua-browser-panel {
             position: fixed;
             top: 0;
@@ -1625,11 +1600,17 @@ def get_body_html() -> str:
                     <h1>OT Data Simulator</h1>
                     <div class="subtitle">Real-Time Visualization • Natural Language AI • W3C WoT Discovery • ZeroBus Streaming</div>
                 </div>
-                <a href="/wot/browser" style="padding: 12px 24px; background: linear-gradient(135deg, #00A9E0 0%, #0080B3 100%); color: white; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 12px rgba(0, 169, 224, 0.3); transition: all 0.3s;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 16px rgba(0, 169, 224, 0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(0, 169, 224, 0.3)'">
-                    <span style="font-size: 18px;">🌐</span>
-                    <span>WoT Browser</span>
-                    <span style="font-size: 10px; background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 12px;">379 sensors</span>
-                </a>
+                <div style="display: flex; gap: 12px;">
+                    <a href="/wot/browser" style="padding: 12px 24px; background: linear-gradient(135deg, #00A9E0 0%, #0080B3 100%); color: white; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 12px rgba(0, 169, 224, 0.3); transition: all 0.3s;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 16px rgba(0, 169, 224, 0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(0, 169, 224, 0.3)'">
+                        <span style="font-size: 18px;">🌐</span>
+                        <span>WoT Browser</span>
+                        <span style="font-size: 10px; background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 12px;">379 sensors</span>
+                    </a>
+                    <button onclick="toggleOPCUABrowser()" style="padding: 12px 24px; background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%); color: white; border: none; border-radius: 8px; font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3); transition: all 0.3s; cursor: pointer;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 16px rgba(139, 92, 246, 0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(139, 92, 246, 0.3)'">
+                        <span style="font-size: 18px;">📡</span>
+                        <span>Browse OPC-UA</span>
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -1956,11 +1937,6 @@ def get_body_html() -> str:
             <button class="chat-send" id="chat-send">Send</button>
         </div>
     </div>
-
-    <!-- OPC-UA Browser Button -->
-    <button class="opcua-browser-button" id="opcua-browser-toggle">
-        📡 Browse OPC-UA
-    </button>
 
     <!-- OPC-UA Browser Panel -->
     <div class="opcua-browser-panel hidden" id="opcua-browser-panel">
@@ -4505,7 +4481,6 @@ def get_scripts_html() -> str:
         }, 1000);
 
         // OPC-UA Browser functionality
-        const opcuaBrowserToggle = document.getElementById('opcua-browser-toggle');
         const opcuaBrowserPanel = document.getElementById('opcua-browser-panel');
         const opcuaBrowserClose = document.getElementById('opcua-browser-close');
         const opcuaTreeContainer = document.getElementById('opcua-tree-container');
@@ -4514,8 +4489,8 @@ def get_scripts_html() -> str:
         let opcuaHierarchyData = null;
         let opcuaUpdateInterval = null;
 
-        // Toggle OPC-UA browser panel
-        opcuaBrowserToggle.addEventListener('click', () => {
+        // Global function to toggle OPC-UA browser panel (called from header button)
+        window.toggleOPCUABrowser = function() {
             opcuaBrowserPanel.classList.remove('hidden');
             if (!opcuaHierarchyData) {
                 loadOpcuaHierarchy();
@@ -4524,7 +4499,7 @@ def get_scripts_html() -> str:
             if (!opcuaUpdateInterval) {
                 opcuaUpdateInterval = setInterval(updateOpcuaValues, 500);
             }
-        });
+        };
 
         opcuaBrowserClose.addEventListener('click', () => {
             opcuaBrowserPanel.classList.add('hidden');
