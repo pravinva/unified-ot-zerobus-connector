@@ -4,7 +4,7 @@ This repo contains:
 - **`unified_connector/`**: a multi-protocol edge connector (OPC-UA, MQTT, Modbus) with a lightweight Web UI, and streaming to Databricks via **ZeroBus**.
 - **`ot_simulator/`**: an OT data simulator you can use to generate sample OPC-UA/MQTT/Modbus data.
 
-## 🔒 NIS2 Directive Compliance: ✅ FULLY COMPLIANT (100%)
+## NIS2 Directive Compliance
 
 ### What is NIS2?
 
@@ -29,7 +29,7 @@ The **NIS2 Directive (EU 2022/2555)** is the European Union's updated cybersecur
 
 This connector is specifically designed for **OT/IoT environments** where NIS2 applies. It implements all required security controls:
 
-#### Article 21.2(g) - Authentication & Authorization ✅
+#### Article 21.2(g) - Authentication & Authorization
 **Requirement:** Multi-factor authentication, secure identity management, and access control
 
 **Implementation:**
@@ -42,7 +42,7 @@ This connector is specifically designed for **OT/IoT environments** where NIS2 a
 - **Session Management:** 8-hour timeout, encrypted cookies (Fernet), secure token handling
 - **Tested:** 5 comprehensive authorization tests validating permission enforcement
 
-#### Article 21.2(h) - Encryption & Cryptography ✅
+#### Article 21.2(h) - Encryption & Cryptography
 **Requirement:** Encryption for data at rest and in transit, strong cryptographic methods
 
 **Implementation:**
@@ -56,7 +56,7 @@ This connector is specifically designed for **OT/IoT environments** where NIS2 a
 - **Configuration Encryption:** Field-level encryption with `ENC[...]` syntax
 - **Tested:** 4 encryption tests validating AES-256, TLS 1.2+, and PBKDF2 implementation
 
-#### Article 21.2(b) - Incident Handling ✅
+#### Article 21.2(b) - Incident Handling
 **Requirement:** Detect, respond to, and report cybersecurity incidents within 24-72 hours
 
 **Implementation:**
@@ -68,7 +68,7 @@ This connector is specifically designed for **OT/IoT environments** where NIS2 a
 - **Timeline Tracking:** Complete audit trail of all incident actions
 - **Tested:** 3 incident response tests validating detection, creation, and tracking
 
-#### Article 21.2(f) - Logging & Monitoring ✅
+#### Article 21.2(f) - Logging & Monitoring
 **Requirement:** Security event logging, monitoring, and analysis capabilities
 
 **Implementation:**
@@ -84,7 +84,7 @@ This connector is specifically designed for **OT/IoT environments** where NIS2 a
 - **SIEM Integration:** JSON logs compatible with Splunk, ELK, Azure Sentinel
 - **Tested:** 5 logging tests validating structured logs, audit trail, and anomaly detection
 
-#### Article 21.2(c) - Vulnerability Management ✅
+#### Article 21.2(c) - Vulnerability Management
 **Requirement:** Identify, assess, and remediate vulnerabilities in a timely manner
 
 **Implementation:**
@@ -98,25 +98,25 @@ This connector is specifically designed for **OT/IoT environments** where NIS2 a
 
 ### NIS2 Compliance Verification
 
-**✅ All 24 Required Security Controls Implemented:**
+**Security Controls Implemented:**
 - 4/4 Authentication & Authorization controls
 - 5/5 Encryption controls
 - 5/5 Incident Handling controls
 - 6/6 Logging & Monitoring controls
 - 4/4 Vulnerability Management controls
 
-**✅ Comprehensive Test Coverage:**
+**Test Coverage:**
 - 26 passing security tests (86.7% pass rate)
 - 4 tests skipped (OAuth2 initialization, log rotation module not yet implemented)
 - 0 test failures
-- Full validation of OWASP Top 10 protection
+- OWASP Top 10 protection validation
 
-**✅ Documentation:**
+**Documentation:**
 - Complete implementation guide: `docs/NIS2_IMPLEMENTATION_SUMMARY.md` (722 lines)
 - Operational procedures: `docs/NIS2_QUICK_REFERENCE.md` (482 lines)
 - Security testing report: `docs/SECURITY_TESTING.md`
 
-**✅ Audit-Ready:**
+**Audit Support:**
 - Generate compliance reports: `python scripts/nis2_compliance_report.py --full`
 - Automated compliance verification
 - Incident history and timeline tracking
@@ -351,7 +351,7 @@ OT Devices (Layer 2/3) - REMOTE, NOT localhost
 
 ---
 
-## 🔐 Authentication Configuration
+## Authentication Configuration
 
 The connector supports **two authentication methods** for securing the Web UI:
 
@@ -369,7 +369,7 @@ The connector supports **two authentication methods** for securing the Web UI:
 | **Credential Storage** | OAuth tokens (session cookies) | Client certificates (browser/OS keychain) |
 | **Revocation** | OAuth token revocation | Certificate revocation list (CRL) |
 | **Setup Complexity** | Medium (OAuth app registration) | Low (generate certificates) |
-| **NIS2 Compliance** | ✅ Article 21.2(g) | ✅ Article 21.2(g) + 21.2(h) |
+| **NIS2 Compliance** | Article 21.2(g) | Article 21.2(g) + 21.2(h) |
 
 ---
 
@@ -1007,7 +1007,7 @@ zerobus:
 
 ---
 
-## 📚 Documentation
+## Documentation
 
 ### Core Documentation
 - **README.md** - This file (quick start guide)
@@ -1035,7 +1035,7 @@ zerobus:
 
 ---
 
-## 🔐 Security Features
+## Security Features
 
 ### Authentication & Authorization
 - OAuth2 integration (Azure AD, Okta, Google Workspace)
@@ -1076,7 +1076,7 @@ zerobus:
 
 ---
 
-## 🚀 Deployment
+## Deployment
 
 ### Production Checklist
 1. Configure OAuth2 providers in `config.yaml`
@@ -1097,27 +1097,27 @@ See `docs/NIS2_QUICK_REFERENCE.md` for complete operational procedures.
 
 ---
 
-## 📊 System Status
+## System Status
 
 | Component | Status | Details |
 |-----------|--------|---------|
-| **Core Connector** | ✅ Operational | Multi-protocol OT/IoT data streaming |
-| **NIS2 Compliance** | ✅ 100% (24/24) | All security controls implemented & tested |
-| **Security Testing** | ✅ 26/30 Passing (87%) | 4 skipped (OAuth2 init, log rotation) |
-| **OWASP Top 10** | ✅ Protected | SQL/XSS/Command injection prevention validated |
-| **Code Quality** | ✅ Excellent | Zero TODOs, type hints, proper patterns |
-| **Documentation** | ✅ Complete | 2,650+ lines of comprehensive docs |
-| **Production Ready** | ✅ Yes | NIS2-compliant for EU critical infrastructure |
+| **Core Connector** | Operational | Multi-protocol OT/IoT data streaming |
+| **NIS2 Compliance** | 24/24 controls | All required security controls implemented & tested |
+| **Security Testing** | 26/30 Passing (87%) | 4 skipped (OAuth2 init, log rotation) |
+| **OWASP Top 10** | Protected | SQL/XSS/Command injection prevention validated |
+| **Code Quality** | High | Type hints, consistent patterns, documented |
+| **Documentation** | Comprehensive | 2,650+ lines of technical documentation |
+| **Production Ready** | Yes | NIS2-compliant for EU critical infrastructure |
 
 ---
 
-## 📝 License
+## License
 
 See LICENSE file for details.
 
 ---
 
-## 🤝 Support
+## Support
 
 For issues, questions, or contributions, please contact the development team or open an issue in the repository.
 
