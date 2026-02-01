@@ -55,6 +55,8 @@ class EnhancedWebUI:
         self.app.router.add_get("/api/opcua/thing-description", self.api_handlers.handle_opcua_thing_description)
         # W3C WoT Thing Description Browser
         self.app.router.add_get("/wot/browser", handle_wot_browser)
+        # Raw data stream endpoint
+        self.app.router.add_get("/api/raw-data-stream", self.api_handlers.handle_raw_data_stream)
         # Zero-Bus configuration endpoints
         self.app.router.add_post("/api/zerobus/config/load", self.api_handlers.handle_zerobus_config_load)
         self.app.router.add_post("/api/zerobus/config", self.api_handlers.handle_zerobus_config_save)

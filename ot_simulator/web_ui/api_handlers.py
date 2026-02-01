@@ -1644,3 +1644,166 @@ class APIHandlers:
                 "error": str(e),
                 "detail": error_detail
             }, status=500)
+
+    async def handle_raw_data_stream(self, request: web.Request) -> web.Response:
+        """Get current raw sensor data from all protocols."""
+        try:
+            protocol_filter = request.query.get('protocol')  # Optional: filter by protocol
+            industry_filter = request.query.get('industry')   # Optional: filter by industry
+            limit = int(request.query.get('limit', '100'))    # Max records to return
+
+            raw_data = []
+            now_utc = datetime.now(timezone.utc)
+            now_us = int(now_utc.timestamp() * 1_000_000)
+
+            # Iterate through all protocols
+            for protocol, simulator in self.manager.simulators.items():
+                # Skip if protocol filter is set and doesn't match
+                if protocol_filter and protocol != protocol_filter.lower():
+                    continue
+
+                # Check if simulator is running
+                is_running = False
+                if hasattr(simulator, '_running'):
+                    is_running = simulator._running
+                elif hasattr(simulator, 'get_stats'):
+                    stats = simulator.get_stats()
+                    is_running = stats.get('running', False)
+
+                if not is_running:
+                    continue
+
+                # Get sensor data from simulator
+                if hasattr(simulator, 'simulators'):
+                    # Handle different simulator data structures
+                    if protocol == "modbus":
+                        # Modbus: address -> (path, sensor_sim)
+                        all_items = list(simulator.simulators.items())
+                    else:
+                        # OPC-UA and MQTT: path -> sensor_sim
+                        all_items = list(simulator.simulators.items())
+
+                    for key, data in all_items:
+                        # For Modbus, data is (path, sensor_sim); for others, data is sensor_sim
+                        if protocol == "modbus":
+                            register_address = key
+                            path = data[0]
+                            sensor_sim = data[1]
+                        else:
+                            register_address = None
+                            path = key
+                            sensor_sim = data
+
+                        # Parse industry/sensor_name from path
+                        parts = path.split("/", 1)
+                        industry = parts[0] if len(parts) > 0 else "unknown"
+                        sensor_name = parts[1] if len(parts) > 1 else path
+
+                        # Skip if industry filter is set and doesn't match
+                        if industry_filter and industry != industry_filter.lower():
+                            continue
+
+                        # Get current value
+                        value = sensor_sim.current_value if hasattr(sensor_sim, 'current_value') else sensor_sim.update()
+
+                        # Get PLC information if available
+                        plc_name = ""
+                        plc_vendor = ""
+                        plc_model = ""
+                        if hasattr(self.manager, 'plc_manager') and self.manager.plc_manager:
+                            sensor_data = self.manager.get_sensor_value_with_plc(path)
+                            if sensor_data:
+                                plc_model = sensor_data.get("plc_model", "") or ""
+                                plc_name_id = sensor_data.get("plc_name", "") or ""
+                                if plc_name_id and self.manager.plc_manager:
+                                    plc_obj = self.manager.plc_manager.plcs.get(plc_name_id)
+                                    if plc_obj and hasattr(plc_obj, 'config'):
+                                        plc_vendor = plc_obj.config.vendor if hasattr(plc_obj.config, 'vendor') else ""
+                                        if plc_vendor and plc_model:
+                                            plc_name = f"{plc_vendor} {plc_model}"
+                                        elif plc_model:
+                                            plc_name = plc_model
+                                        else:
+                                            plc_name = plc_name_id
+
+                        # Build protocol-specific raw data record
+                        record = {
+                            "timestamp": now_utc.isoformat(),
+                            "timestamp_us": now_us,
+                            "protocol": protocol,
+                            "industry": industry,
+                            "sensor_name": sensor_name,
+                            "sensor_path": path,
+                            "value": float(value) if isinstance(value, (int, float)) else str(value),
+                            "unit": sensor_sim.config.unit if hasattr(sensor_sim.config, 'unit') else "",
+                            "sensor_type": sensor_sim.config.sensor_type.value if hasattr(sensor_sim.config, 'sensor_type') else "",
+                            "plc_name": plc_name,
+                            "plc_vendor": plc_vendor,
+                            "plc_model": plc_model
+                        }
+
+                        # Add protocol-specific fields
+                        if protocol == "opcua":
+                            opcua_endpoint = getattr(self.config, 'opcua', None)
+                            if opcua_endpoint and hasattr(opcua_endpoint, 'endpoint'):
+                                endpoint = opcua_endpoint.endpoint
+                            else:
+                                endpoint = "opc.tcp://0.0.0.0:4840/ot-simulator/server/"
+                            record.update({
+                                "endpoint": endpoint,
+                                "namespace": 2,
+                                "node_id": f"ns=2;s={path}",
+                                "browse_path": f"0:Root/0:Objects/2:{industry}/2:{sensor_name}",
+                                "status": "Good"
+                            })
+                        elif protocol == "mqtt":
+                            record.update({
+                                "topic": f"sensors/{path}/value",
+                                "qos": 1,
+                                "retain": False
+                            })
+                        elif protocol == "modbus":
+                            scale_factor = 10
+                            if hasattr(self.config, 'modbus') and hasattr(self.config.modbus, 'scale_factor'):
+                                scale_factor = int(self.config.modbus.scale_factor)
+                            raw_value = float(value) if isinstance(value, (int, float)) else 0.0
+                            scaled_value = int(raw_value * scale_factor)
+                            scaled_value = max(-32768, min(32767, scaled_value))
+                            record.update({
+                                "slave_id": int(self.config.modbus.slave_id if hasattr(self.config, 'modbus') else 1),
+                                "register_address": int(register_address if register_address is not None else 0),
+                                "register_type": "holding",
+                                "raw_value": raw_value,
+                                "scaled_value": scaled_value,
+                                "scale_factor": scale_factor
+                            })
+
+                        raw_data.append(record)
+
+                        # Limit results
+                        if len(raw_data) >= limit:
+                            break
+
+                if len(raw_data) >= limit:
+                    break
+
+            return web.json_response({
+                "success": True,
+                "count": len(raw_data),
+                "data": raw_data,
+                "filters": {
+                    "protocol": protocol_filter,
+                    "industry": industry_filter,
+                    "limit": limit
+                }
+            })
+
+        except Exception as e:
+            import traceback
+            error_detail = traceback.format_exc()
+            logger.error(f"Error getting raw data stream: {error_detail}")
+            return web.json_response({
+                "success": False,
+                "message": str(e),
+                "detail": error_detail
+            }, status=500)

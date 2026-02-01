@@ -1841,6 +1841,44 @@ def get_body_html() -> str:
                 </div>
             </div>
 
+            <!-- Raw Data Stream Section -->
+            <div class="card" style="margin-bottom: 24px;">
+                <div class="card-title" style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>📊 Raw Data Stream</span>
+                    <div style="display: flex; gap: 12px; align-items: center;">
+                        <select id="raw-protocol-filter" class="config-input" style="width: auto; padding: 6px 12px; font-size: 13px;">
+                            <option value="">All Protocols</option>
+                            <option value="opcua">OPC-UA</option>
+                            <option value="mqtt">MQTT</option>
+                            <option value="modbus">Modbus</option>
+                        </select>
+                        <select id="raw-industry-filter" class="config-input" style="width: auto; padding: 6px 12px; font-size: 13px;">
+                            <option value="">All Industries</option>
+                            <option value="mining">Mining</option>
+                            <option value="oil_gas">Oil & Gas</option>
+                            <option value="utilities">Utilities</option>
+                            <option value="manufacturing">Manufacturing</option>
+                        </select>
+                        <button class="btn btn-start" id="raw-stream-toggle" onclick="toggleRawStream()">Start Stream</button>
+                        <button class="btn-test" onclick="clearRawStream()">Clear</button>
+                    </div>
+                </div>
+                <div id="raw-stream-container" style="max-height: 500px; overflow-y: auto; font-family: 'Monaco', 'Courier New', monospace; font-size: 12px; background: #1E1E1E; color: #D4D4D4; padding: 16px; border-radius: 6px; margin-top: 16px;">
+                    <div id="raw-stream-content" style="white-space: pre-wrap; word-wrap: break-word;">
+                        <div style="color: #6B7280; text-align: center; padding: 32px;">
+                            Click "Start Stream" to begin viewing live raw sensor data
+                        </div>
+                    </div>
+                </div>
+                <div style="margin-top: 12px; padding: 12px; background: #F9FAFB; border-radius: 6px; font-size: 13px; color: #6B7280;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>📈 Records shown: <strong id="raw-record-count">0</strong></span>
+                        <span>⏱️ Update rate: 2 seconds</span>
+                        <span>🔄 Auto-scroll: <strong>Enabled</strong></span>
+                    </div>
+                </div>
+            </div>
+
             <!-- Chart Section -->
             <div class="chart-section" id="chart-section">
                 <!-- Charts added dynamically -->
@@ -3746,6 +3784,126 @@ def get_scripts_html() -> str:
                 panel.style.display = 'none';
                 icon.style.transform = 'rotate(0deg)';
             }
+        }
+
+        // Raw Data Stream Functions
+        let rawStreamActive = false;
+        let rawStreamInterval = null;
+
+        async function toggleRawStream() {
+            const button = document.getElementById('raw-stream-toggle');
+            const container = document.getElementById('raw-stream-content');
+
+            if (rawStreamActive) {
+                // Stop streaming
+                rawStreamActive = false;
+                if (rawStreamInterval) {
+                    clearInterval(rawStreamInterval);
+                    rawStreamInterval = null;
+                }
+                button.textContent = 'Start Stream';
+                button.className = 'btn btn-start';
+                container.innerHTML = '<div style="color: #6B7280; text-align: center; padding: 32px;">Stream stopped</div>';
+                document.getElementById('raw-record-count').textContent = '0';
+            } else {
+                // Start streaming
+                rawStreamActive = true;
+                button.textContent = 'Stop Stream';
+                button.className = 'btn btn-stop';
+                container.innerHTML = '<div style="color: #10B981; text-align: center; padding: 16px;">⏳ Loading data...</div>';
+
+                // Initial load
+                await updateRawStream();
+
+                // Update every 2 seconds
+                rawStreamInterval = setInterval(updateRawStream, 2000);
+            }
+        }
+
+        async function updateRawStream() {
+            const protocolFilter = document.getElementById('raw-protocol-filter').value;
+            const industryFilter = document.getElementById('raw-industry-filter').value;
+            const container = document.getElementById('raw-stream-content');
+            const countElement = document.getElementById('raw-record-count');
+
+            try {
+                // Build query string
+                const params = new URLSearchParams();
+                if (protocolFilter) params.append('protocol', protocolFilter);
+                if (industryFilter) params.append('industry', industryFilter);
+                params.append('limit', '50');
+
+                const response = await fetch(`/api/raw-data-stream?${params.toString()}`);
+                const result = await response.json();
+
+                if (result.success && result.data && result.data.length > 0) {
+                    // Format data as readable JSON
+                    let output = '';
+                    result.data.forEach((record, index) => {
+                        const timestamp = new Date(record.timestamp).toLocaleTimeString();
+                        output += `<div style="margin-bottom: 12px; padding: 12px; background: #2D2D2D; border-left: 3px solid ${getProtocolColor(record.protocol)}; border-radius: 4px;">`;
+                        output += `<div style="display: flex; justify-content: space-between; margin-bottom: 8px;">`;
+                        output += `<span style="color: ${getProtocolColor(record.protocol)}; font-weight: 600;">${record.protocol.toUpperCase()}</span>`;
+                        output += `<span style="color: #9CA3AF; font-size: 11px;">${timestamp}</span>`;
+                        output += `</div>`;
+                        output += `<div style="color: #10B981; font-size: 13px; margin-bottom: 4px;">`;
+                        output += `${record.industry}/${record.sensor_name}`;
+                        output += `</div>`;
+                        output += `<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px;">`;
+                        output += `<span style="color: #6B7280;">Value:</span>`;
+                        output += `<span style="color: #00A9E0; font-weight: 600;">${record.value} ${record.unit || ''}</span>`;
+                        output += `<span style="color: #6B7280;">Type:</span>`;
+                        output += `<span style="color: #D4D4D4;">${record.sensor_type || 'N/A'}</span>`;
+                        if (record.plc_name) {
+                            output += `<span style="color: #6B7280;">PLC:</span>`;
+                            output += `<span style="color: #D4D4D4;">${record.plc_name}</span>`;
+                        }
+                        // Protocol-specific fields
+                        if (record.protocol === 'opcua' && record.node_id) {
+                            output += `<span style="color: #6B7280;">Node ID:</span>`;
+                            output += `<span style="color: #D4D4D4; font-family: monospace; font-size: 11px;">${record.node_id}</span>`;
+                        } else if (record.protocol === 'mqtt' && record.topic) {
+                            output += `<span style="color: #6B7280;">Topic:</span>`;
+                            output += `<span style="color: #D4D4D4; font-family: monospace; font-size: 11px;">${record.topic}</span>`;
+                        } else if (record.protocol === 'modbus' && record.register_address !== undefined) {
+                            output += `<span style="color: #6B7280;">Register:</span>`;
+                            output += `<span style="color: #D4D4D4;">${record.register_address} (${record.register_type})</span>`;
+                        }
+                        output += `</div></div>`;
+
+                        // Limit display to 20 records
+                        if (index >= 19) return;
+                    });
+
+                    container.innerHTML = output;
+                    countElement.textContent = result.count;
+
+                    // Auto-scroll to bottom
+                    const streamContainer = document.getElementById('raw-stream-container');
+                    streamContainer.scrollTop = streamContainer.scrollHeight;
+                } else {
+                    container.innerHTML = '<div style="color: #6B7280; text-align: center; padding: 32px;">No data available. Start a protocol simulator first.</div>';
+                    countElement.textContent = '0';
+                }
+            } catch (error) {
+                console.error('Error fetching raw stream data:', error);
+                container.innerHTML = `<div style="color: #EF4444; text-align: center; padding: 32px;">Error: ${error.message}</div>`;
+            }
+        }
+
+        function clearRawStream() {
+            const container = document.getElementById('raw-stream-content');
+            container.innerHTML = '<div style="color: #6B7280; text-align: center; padding: 32px;">Stream cleared. Click "Start Stream" to continue.</div>';
+            document.getElementById('raw-record-count').textContent = '0';
+        }
+
+        function getProtocolColor(protocol) {
+            const colors = {
+                'opcua': '#00A9E0',
+                'mqtt': '#10B981',
+                'modbus': '#8B5CF6'
+            };
+            return colors[protocol] || '#6B7280';
         }
 
         async function saveZeroBusConfig(protocol) {
