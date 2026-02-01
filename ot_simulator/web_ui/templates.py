@@ -770,18 +770,18 @@ def get_styles_html() -> str:
         @keyframes slideIn {
             from {
                 opacity: 0;
-                transform: translateX(-20px);
+                transform: translateY(-10px);
                 background: rgba(16, 185, 129, 0.2);
             }
             to {
                 opacity: 1;
-                transform: translateX(0);
+                transform: translateY(0);
                 background: transparent;
             }
         }
 
         .stream-record-new {
-            animation: slideIn 0.5s ease-out;
+            animation: slideIn 0.4s ease-out;
         }
 
         @keyframes fadeIn {
@@ -3832,8 +3832,8 @@ def get_scripts_html() -> str:
                 const result = await response.json();
 
                 if (result.success && result.data && result.data.length > 0) {
-                    // Check if user is scrolled to bottom (within 50px)
-                    const isScrolledToBottom = streamContainer.scrollHeight - streamContainer.scrollTop - streamContainer.clientHeight < 50;
+                    // Check if user is scrolled to top (within 50px)
+                    const isScrolledToTop = streamContainer.scrollTop < 50;
 
                     // Format new data
                     let output = '';
@@ -3870,21 +3870,22 @@ def get_scripts_html() -> str:
                         output += `</div></div>`;
                     });
 
-                    // Append new records to the bottom
-                    container.insertAdjacentHTML('beforeend', output);
+                    // Prepend new records to the top
+                    container.insertAdjacentHTML('afterbegin', output);
 
                     // Remove animation class after animation completes to allow re-triggering
                     setTimeout(() => {
                         const newRecords = container.querySelectorAll('.stream-record-new');
                         newRecords.forEach(record => record.classList.remove('stream-record-new'));
-                    }, 500);
+                    }, 400);
                     rawStreamRecordCount += result.data.length;
 
-                    // Trim old records if we exceed MAX_STREAM_RECORDS
+                    // Trim old records from the bottom if we exceed MAX_STREAM_RECORDS
                     const records = container.querySelectorAll('.stream-record');
                     if (records.length > MAX_STREAM_RECORDS) {
                         const toRemove = records.length - MAX_STREAM_RECORDS;
-                        for (let i = 0; i < toRemove; i++) {
+                        // Remove from the end (oldest records)
+                        for (let i = records.length - 1; i >= records.length - toRemove; i--) {
                             records[i].remove();
                         }
                         rawStreamRecordCount = MAX_STREAM_RECORDS;
@@ -3892,9 +3893,9 @@ def get_scripts_html() -> str:
 
                     countElement.textContent = rawStreamRecordCount;
 
-                    // Auto-scroll to bottom only if user was already at bottom
-                    if (isScrolledToBottom) {
-                        streamContainer.scrollTop = streamContainer.scrollHeight;
+                    // Auto-scroll to top only if user was already at top
+                    if (isScrolledToTop) {
+                        streamContainer.scrollTop = 0;
                     }
                 } else if (!container.querySelector('.stream-record')) {
                     container.innerHTML = '<div style="color: #6B7280; text-align: center; padding: 32px;">No data available. Start a protocol simulator first.</div>';
