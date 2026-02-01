@@ -767,6 +767,23 @@ def get_styles_html() -> str:
             transform: none;
         }
 
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+                background: rgba(16, 185, 129, 0.2);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+                background: transparent;
+            }
+        }
+
+        .stream-record-new {
+            animation: slideIn 0.5s ease-out;
+        }
+
         @keyframes fadeIn {
             from {
                 opacity: 0;
@@ -3789,6 +3806,8 @@ def get_scripts_html() -> str:
         // Raw Data Stream Functions
         let rawStreamActive = false;
         let rawStreamInterval = null;
+        let rawStreamRecordCount = 0;
+        const MAX_STREAM_RECORDS = 200;  // Keep last 200 records
 
         async function toggleRawStream() {
             const button = document.getElementById('raw-stream-toggle');
@@ -3803,11 +3822,10 @@ def get_scripts_html() -> str:
                 }
                 button.textContent = 'Start Stream';
                 button.className = 'btn btn-start';
-                container.innerHTML = '<div style="color: #6B7280; text-align: center; padding: 32px;">Stream stopped</div>';
-                document.getElementById('raw-record-count').textContent = '0';
             } else {
                 // Start streaming
                 rawStreamActive = true;
+                rawStreamRecordCount = 0;
                 button.textContent = 'Stop Stream';
                 button.className = 'btn btn-stop';
                 container.innerHTML = '<div style="color: #10B981; text-align: center; padding: 16px;">⏳ Loading data...</div>';
@@ -3825,23 +3843,27 @@ def get_scripts_html() -> str:
             const industryFilter = document.getElementById('raw-industry-filter').value;
             const container = document.getElementById('raw-stream-content');
             const countElement = document.getElementById('raw-record-count');
+            const streamContainer = document.getElementById('raw-stream-container');
 
             try {
                 // Build query string
                 const params = new URLSearchParams();
                 if (protocolFilter) params.append('protocol', protocolFilter);
                 if (industryFilter) params.append('industry', industryFilter);
-                params.append('limit', '50');
+                params.append('limit', '20');
 
                 const response = await fetch(`/api/raw-data-stream?${params.toString()}`);
                 const result = await response.json();
 
                 if (result.success && result.data && result.data.length > 0) {
-                    // Format data as readable JSON
+                    // Check if user is scrolled to bottom (within 50px)
+                    const isScrolledToBottom = streamContainer.scrollHeight - streamContainer.scrollTop - streamContainer.clientHeight < 50;
+
+                    // Format new data
                     let output = '';
-                    result.data.forEach((record, index) => {
+                    result.data.forEach((record) => {
                         const timestamp = new Date(record.timestamp).toLocaleTimeString();
-                        output += `<div style="margin-bottom: 12px; padding: 12px; background: #2D2D2D; border-left: 3px solid ${getProtocolColor(record.protocol)}; border-radius: 4px;">`;
+                        output += `<div class="stream-record stream-record-new" style="margin-bottom: 12px; padding: 12px; background: #2D2D2D; border-left: 3px solid ${getProtocolColor(record.protocol)}; border-radius: 4px;">`;
                         output += `<div style="display: flex; justify-content: space-between; margin-bottom: 8px;">`;
                         output += `<span style="color: ${getProtocolColor(record.protocol)}; font-weight: 600;">${record.protocol.toUpperCase()}</span>`;
                         output += `<span style="color: #9CA3AF; font-size: 11px;">${timestamp}</span>`;
@@ -3851,7 +3873,7 @@ def get_scripts_html() -> str:
                         output += `</div>`;
                         output += `<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px;">`;
                         output += `<span style="color: #6B7280;">Value:</span>`;
-                        output += `<span style="color: #00A9E0; font-weight: 600;">${record.value} ${record.unit || ''}</span>`;
+                        output += `<span style="color: #00A9E0; font-weight: 600;">${typeof record.value === 'number' ? record.value.toFixed(2) : record.value} ${record.unit || ''}</span>`;
                         output += `<span style="color: #6B7280;">Type:</span>`;
                         output += `<span style="color: #D4D4D4;">${record.sensor_type || 'N/A'}</span>`;
                         if (record.plc_name) {
@@ -3870,30 +3892,50 @@ def get_scripts_html() -> str:
                             output += `<span style="color: #D4D4D4;">${record.register_address} (${record.register_type})</span>`;
                         }
                         output += `</div></div>`;
-
-                        // Limit display to 20 records
-                        if (index >= 19) return;
                     });
 
-                    container.innerHTML = output;
-                    countElement.textContent = result.count;
+                    // Append new records to the bottom
+                    container.insertAdjacentHTML('beforeend', output);
 
-                    // Auto-scroll to bottom
-                    const streamContainer = document.getElementById('raw-stream-container');
-                    streamContainer.scrollTop = streamContainer.scrollHeight;
-                } else {
+                    // Remove animation class after animation completes to allow re-triggering
+                    setTimeout(() => {
+                        const newRecords = container.querySelectorAll('.stream-record-new');
+                        newRecords.forEach(record => record.classList.remove('stream-record-new'));
+                    }, 500);
+                    rawStreamRecordCount += result.data.length;
+
+                    // Trim old records if we exceed MAX_STREAM_RECORDS
+                    const records = container.querySelectorAll('.stream-record');
+                    if (records.length > MAX_STREAM_RECORDS) {
+                        const toRemove = records.length - MAX_STREAM_RECORDS;
+                        for (let i = 0; i < toRemove; i++) {
+                            records[i].remove();
+                        }
+                        rawStreamRecordCount = MAX_STREAM_RECORDS;
+                    }
+
+                    countElement.textContent = rawStreamRecordCount;
+
+                    // Auto-scroll to bottom only if user was already at bottom
+                    if (isScrolledToBottom) {
+                        streamContainer.scrollTop = streamContainer.scrollHeight;
+                    }
+                } else if (!container.querySelector('.stream-record')) {
                     container.innerHTML = '<div style="color: #6B7280; text-align: center; padding: 32px;">No data available. Start a protocol simulator first.</div>';
                     countElement.textContent = '0';
                 }
             } catch (error) {
                 console.error('Error fetching raw stream data:', error);
-                container.innerHTML = `<div style="color: #EF4444; text-align: center; padding: 32px;">Error: ${error.message}</div>`;
+                if (!container.querySelector('.stream-record')) {
+                    container.innerHTML = `<div style="color: #EF4444; text-align: center; padding: 32px;">Error: ${error.message}</div>`;
+                }
             }
         }
 
         function clearRawStream() {
             const container = document.getElementById('raw-stream-content');
             container.innerHTML = '<div style="color: #6B7280; text-align: center; padding: 32px;">Stream cleared. Click "Start Stream" to continue.</div>';
+            rawStreamRecordCount = 0;
             document.getElementById('raw-record-count').textContent = '0';
         }
 
