@@ -212,6 +212,11 @@ def require_permission(permission: Permission):
     def decorator(handler):
         @wraps(handler)
         async def wrapper(self, request):
+            # Skip permission check if authentication is disabled
+            auth_manager = request.app.get('auth_manager')
+            if not auth_manager or not auth_manager.enabled:
+                return await handler(self, request)
+
             # Get user from request (set by auth_middleware)
             user = request.get('user')
 
@@ -320,6 +325,11 @@ def require_role(role: Role):
     def decorator(handler):
         @wraps(handler)
         async def wrapper(self, request):
+            # Skip role check if authentication is disabled
+            auth_manager = request.app.get('auth_manager')
+            if not auth_manager or not auth_manager.enabled:
+                return await handler(self, request)
+
             user = request.get('user')
 
             if not user:

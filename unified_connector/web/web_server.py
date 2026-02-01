@@ -1093,14 +1093,19 @@ class WebServer:
 
     async def get_auth_status(self, request: web.Request) -> web.Response:
         """Get current authentication status and user info."""
+        auth_manager = request.app.get('auth_manager')
+        auth_enabled = auth_manager and auth_manager.enabled if auth_manager else False
+
         user = request.get('user')
         if not user:
             return web.json_response({
+                'auth_enabled': auth_enabled,
                 'authenticated': False,
                 'user': None
             })
 
         return web.json_response({
+            'auth_enabled': auth_enabled,
             'authenticated': True,
             'user': user.to_dict()
         })

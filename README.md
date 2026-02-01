@@ -351,6 +351,662 @@ OT Devices (Layer 2/3) - REMOTE, NOT localhost
 
 ---
 
+## 🔐 Authentication Configuration
+
+The connector supports **two authentication methods** for securing the Web UI:
+
+1. **OAuth2 Authentication** - Enterprise SSO integration (Azure AD, Okta, Google Workspace)
+2. **Client Certificate Authentication (mTLS)** - Certificate-based authentication for zero-trust environments
+
+### Authentication Method Comparison
+
+| Feature | OAuth2 | Client Certificate (mTLS) |
+|---------|--------|---------------------------|
+| **Best For** | Enterprise deployments with existing IdP | High-security OT environments, API access |
+| **User Experience** | Browser redirect to SSO login | Import certificate to browser (one-time setup) |
+| **MFA Support** | Yes (handled by OAuth provider) | Certificate = possession factor |
+| **RBAC Mapping** | OAuth groups → roles | Certificate OU/CN → roles |
+| **Credential Storage** | OAuth tokens (session cookies) | Client certificates (browser/OS keychain) |
+| **Revocation** | OAuth token revocation | Certificate revocation list (CRL) |
+| **Setup Complexity** | Medium (OAuth app registration) | Low (generate certificates) |
+| **NIS2 Compliance** | ✅ Article 21.2(g) | ✅ Article 21.2(g) + 21.2(h) |
+
+---
+
+### Method 1: OAuth2 Authentication
+
+OAuth2 is recommended for **enterprise deployments** where users already have corporate accounts (Azure AD, Okta, Google Workspace).
+
+#### How OAuth2 Works
+
+```
+┌─────────────┐                           ┌──────────────────┐
+│   Browser   │                           │  OAuth Provider  │
+│             │                           │  (Azure AD/Okta) │
+└──────┬──────┘                           └────────┬─────────┘
+       │                                           │
+       │  1. Access https://connector:8000        │
+       │  ──────────────────────────────────────> │
+       │                                           │
+       │  2. Redirect to OAuth login page         │
+       │  <────────────────────────────────────── │
+       │                                           │
+       │  3. User enters credentials + MFA        │
+       │  ──────────────────────────────────────> │
+       │                                           │
+       │  4. OAuth provider validates & issues    │
+       │     authorization code                   │
+       │  <────────────────────────────────────── │
+       │                                           │
+       │  5. Redirect back to connector with code │
+       │  ──────────────────────────────────────> │
+       │                                           │
+┌──────▼──────┐                                    │
+│  Connector  │  6. Exchange code for tokens      │
+│  Web UI     │  ──────────────────────────────────>
+│             │                                    │
+│             │  7. Receive access token + groups  │
+│             │  <──────────────────────────────────
+│             │                                    │
+│             │  8. Map groups to RBAC role        │
+│             │     (OT-Admins → admin role)       │
+│             │                                    │
+│             │  9. Create session cookie          │
+│             │     (encrypted, 8-hour timeout)    │
+└─────────────┘
+```
+
+#### OAuth2 Configuration Steps
+
+**Step 1: Register OAuth Application**
+
+**For Azure AD (Databricks OAuth2):**
+1. Go to Azure Portal → App Registrations → New Registration
+2. Set **Redirect URI**: `http://localhost:8000/login/callback` (or your production URL)
+3. Generate **Client Secret** (copy immediately - shown once)
+4. Note **Client ID** and **Tenant ID**
+5. API Permissions: Add `User.Read` and `GroupMember.Read.All`
+
+**For Okta:**
+1. Okta Admin Console → Applications → Create App Integration
+2. Choose **OIDC - OpenID Connect** and **Web Application**
+3. Set **Sign-in redirect URI**: `http://localhost:8000/login/callback`
+4. Note **Client ID** and **Client Secret**
+
+**For Google Workspace:**
+1. Google Cloud Console → APIs & Services → Credentials
+2. Create **OAuth 2.0 Client ID** (Web application)
+3. Authorized redirect URI: `http://localhost:8000/login/callback`
+4. Download **client_secret.json** or copy Client ID/Secret
+
+**Step 2: Configure Connector**
+
+Edit `unified_connector/config/config.yaml`:
+
+```yaml
+web_ui:
+  enabled: true
+  host: 0.0.0.0
+  port: 8000
+
+  authentication:
+    enabled: true
+    method: oauth2  # Set to 'oauth2'
+    require_mfa: false  # Set true if you want to enforce MFA
+
+    oauth:
+      # Databricks OAuth2 (Service Principal authentication)
+      provider: databricks  # or 'azure', 'okta', 'google'
+      client_id: ${credential:oauth.client_id}
+      client_secret: ${credential:oauth.client_secret}
+      workspace_host: https://your-workspace.cloud.databricks.com
+      redirect_uri: http://localhost:8000/login/callback
+      scopes:
+        - all-apis  # Databricks scope
+      # For Azure AD, use: ['openid', 'profile', 'email', 'User.Read']
+      # For Okta, use: ['openid', 'profile', 'email', 'groups']
+      # For Google, use: ['openid', 'email', 'profile']
+
+    session:
+      secret_key: ${credential:session.secret_key}
+      max_age_seconds: 28800  # 8 hours
+      cookie_name: unified_connector_session
+      secure: true  # MUST be true in production with HTTPS
+      httponly: true
+      samesite: lax
+
+    rbac:
+      enabled: true
+      # Map OAuth groups to roles
+      role_mappings:
+        "OT-Admins": admin          # Users in "OT-Admins" group → admin role
+        "OT-Operators": operator    # Users in "OT-Operators" group → operator role
+        "OT-Viewers": viewer        # Users in "OT-Viewers" group → viewer role
+      # Default role for authenticated users with no group match
+      default_role: viewer
+
+  # TLS is REQUIRED for OAuth2 in production (secure cookies)
+  tls:
+    enabled: true
+    cert_file: "~/.unified_connector/certs/server-cert.pem"
+    key_file: "~/.unified_connector/certs/server-key.pem"
+```
+
+**Step 3: Store OAuth Credentials Securely**
+
+Use the credential manager to encrypt and store OAuth secrets:
+
+```bash
+# Set master password (REQUIRED for credential encryption)
+export CONNECTOR_MASTER_PASSWORD='your-secure-password-here'
+
+# Start connector (credential manager will prompt for values on first run)
+.venv312/bin/python -m unified_connector --log-level INFO
+
+# OR pre-populate credentials via environment variables:
+export OAUTH_CLIENT_ID='your-client-id'
+export OAUTH_CLIENT_SECRET='your-client-secret'
+export SESSION_SECRET_KEY='generate-with-openssl-rand-base64-32'
+```
+
+Credentials are stored encrypted in `~/.unified_connector/credentials.enc` using AES-256-CBC.
+
+**Step 4: Configure RBAC Role Mappings**
+
+Map OAuth groups from your identity provider to connector roles:
+
+```yaml
+rbac:
+  enabled: true
+  role_mappings:
+    # Map OAuth group names to roles
+    "OT-Admins": admin           # Full access (configure, manage users, delete)
+    "OT-Operators": operator     # Manage sources (start/stop, modify)
+    "OT-Viewers": viewer         # Read-only access
+    "Engineering": operator      # Custom group mapping
+    "IT-Security": admin
+  default_role: viewer           # Fallback for authenticated users without group match
+```
+
+**Role Permissions:**
+
+| Role | Permissions |
+|------|-------------|
+| **admin** | read, write, configure, manage_users, start_stop, delete |
+| **operator** | read, write, start_stop |
+| **viewer** | read |
+
+**Step 5: Test OAuth Flow**
+
+1. Start connector: `.venv312/bin/python -m unified_connector --log-level INFO`
+2. Open browser: `https://localhost:8000` (will redirect to OAuth provider)
+3. Enter credentials + MFA (if required)
+4. Verify redirect back to connector with session established
+5. Check logs for group/role mapping:
+   ```
+   INFO - User authenticated: user@company.com, groups=['OT-Operators'], role=operator
+   ```
+
+#### OAuth Troubleshooting
+
+**Issue 1: "OAuth Custom App Required" Error**
+
+**Symptom:**
+```
+ERROR - OAuth error: invalid_request
+Description: OAuth Custom App must be created in Databricks workspace
+```
+
+**Cause:** Using service principal credentials instead of OAuth Custom App.
+
+**Fix:**
+- **Service Principal** (Client Credentials Flow): For M2M authentication, NOT browser login
+- **OAuth Custom App** (Authorization Code Flow): Required for human login via browser
+
+In Databricks:
+1. Workspace Settings → Identity and Access → OAuth Custom App Settings
+2. Create new OAuth Custom App (NOT service principal)
+3. Use the Custom App Client ID/Secret in config
+
+**Issue 2: Redirect Loop / "Invalid State" Error**
+
+**Cause:** Session cookie not being saved (usually HTTPS mismatch).
+
+**Fix:**
+- If using HTTPS (`tls.enabled: true`), set `session.secure: true`
+- If using HTTP (dev only), set `session.secure: false`
+- Verify redirect URI matches exactly (trailing slash matters)
+
+**Issue 3: "Forbidden - Insufficient Permissions"**
+
+**Cause:** User authenticated successfully but role mapping failed.
+
+**Fix:**
+1. Check OAuth provider returns groups in token claims
+2. Verify group names match `role_mappings` in config (case-sensitive)
+3. Check logs for group extraction:
+   ```
+   INFO - OAuth groups extracted: ['OT-Users', 'Engineering']
+   INFO - No role mapping found, using default_role: viewer
+   ```
+
+---
+
+### Method 2: Client Certificate Authentication (mTLS)
+
+Client certificates are recommended for **high-security OT environments**, **API access**, and **zero-trust architectures**.
+
+#### How Client Certificate Authentication Works
+
+```
+┌─────────────┐                           ┌──────────────────┐
+│   Browser   │                           │    Connector     │
+│  (has cert) │                           │    Web UI        │
+└──────┬──────┘                           └────────┬─────────┘
+       │                                           │
+       │  1. TLS Handshake (ClientHello)          │
+       │  ──────────────────────────────────────> │
+       │                                           │
+       │  2. Server sends certificate + requests  │
+       │     client certificate (CertificateRequest)
+       │  <────────────────────────────────────── │
+       │                                           │
+       │  3. Client sends certificate chain        │
+       │     (CN=client-admin, OU=admin)          │
+       │  ──────────────────────────────────────> │
+       │                                           │
+       │  4. Server verifies certificate against  │
+       │     CA cert, extracts CN/OU fields       │
+       │                                           │
+       │  5. Map OU to RBAC role:                 │
+       │     OU=admin → admin role                │
+       │                                           │
+       │  6. Create authenticated session         │
+       │  <────────────────────────────────────── │
+       │                                           │
+       │  7. User accesses UI with admin role     │
+```
+
+**Key Advantage:** Zero network calls to external IdP - authentication happens during TLS handshake.
+
+#### Client Certificate Setup
+
+**Step 1: Generate Certificates**
+
+Use the provided certificate generation script:
+
+```bash
+# Generate CA certificate + server certificate + client certificates (admin/operator/viewer)
+.venv312/bin/python unified_connector/scripts/generate_certs.py
+
+# Output:
+# ~/.unified_connector/certs/
+#   ├── ca-cert.pem              # Certificate Authority (root of trust)
+#   ├── ca-key.pem               # CA private key (keep secure!)
+#   ├── server-cert.pem          # Server TLS certificate
+#   ├── server-key.pem           # Server private key
+#   ├── client-admin.p12         # Admin client certificate (password: demo123)
+#   ├── client-operator.p12      # Operator client certificate (password: demo123)
+#   └── client-viewer.p12        # Viewer client certificate (password: demo123)
+```
+
+**Certificate Details:**
+- **CA Certificate**: Self-signed root CA (valid 10 years)
+- **Server Certificate**: CN=localhost, SAN=[localhost, 127.0.0.1, ::1] (valid 825 days)
+- **Client Certificates**: Each has unique OU field for role mapping
+  - `client-admin.p12`: CN=client-admin, **OU=admin**
+  - `client-operator.p12`: CN=client-operator, **OU=operator**
+  - `client-viewer.p12`: CN=client-viewer, **OU=viewer**
+
+**Step 2: Configure Connector**
+
+Edit `unified_connector/config/config.yaml`:
+
+```yaml
+web_ui:
+  enabled: true
+  host: 0.0.0.0
+  port: 8000
+
+  authentication:
+    enabled: true
+    method: client_cert  # Set to 'client_cert'
+
+    # Client Certificate Authentication (mutual TLS)
+    client_cert:
+      # Map certificate OU or CN patterns to roles
+      role_mappings:
+        admin: admin                # OU=admin → admin role
+        operator: operator          # OU=operator → operator role
+        viewer: viewer              # OU=viewer → viewer role
+        client-admin: admin         # CN contains "client-admin" → admin role
+        client-operator: operator   # CN contains "client-operator" → operator role
+        client-viewer: viewer       # CN contains "client-viewer" → viewer role
+      default_role: viewer          # Default role if no mapping matches
+
+  # TLS is REQUIRED for client certificate authentication
+  tls:
+    enabled: true  # MUST be true
+    common_name: localhost
+    san_list:  # Subject Alternative Names
+      - localhost
+      - 127.0.0.1
+      - ::1
+      # Add your server hostname/IP for production:
+      # - unified-connector.example.com
+      # - 192.168.1.100
+
+    # Certificate paths (using generated certificates)
+    cert_file: "~/.unified_connector/certs/server-cert.pem"
+    key_file: "~/.unified_connector/certs/server-key.pem"
+    ca_cert_file: "~/.unified_connector/certs/ca-cert.pem"  # CA cert for verifying client certs
+
+    # HSTS (HTTP Strict Transport Security) settings
+    hsts:
+      max_age: 31536000  # 1 year in seconds
+      include_subdomains: true
+      preload: false
+
+    # Client certificate authentication (mutual TLS)
+    require_client_cert: true  # MUST be true for client cert auth
+```
+
+**Step 3: Import Client Certificate to Browser**
+
+**macOS (Chrome/Safari/Edge):**
+1. Double-click `client-admin.p12` in Finder
+2. Keychain Access opens → Enter password: `demo123`
+3. Certificate installed in "My Certificates"
+4. **Trust Settings**: Double-click certificate → Trust → "Always Trust"
+
+**Windows (Chrome/Edge):**
+1. Double-click `client-admin.p12` in File Explorer
+2. Certificate Import Wizard → Select "Current User"
+3. Enter password: `demo123`
+4. Select "Automatically select certificate store"
+5. Finish import
+
+**Linux (Firefox):**
+1. Firefox → Settings → Privacy & Security → View Certificates
+2. Your Certificates → Import
+3. Select `client-admin.p12` → Enter password: `demo123`
+4. Certificate installed
+
+**Linux (Chrome):**
+1. Chrome → Settings → Privacy and Security → Security → Manage Certificates
+2. Your Certificates → Import
+3. Select `client-admin.p12` → Enter password: `demo123`
+4. Certificate installed in NSS database
+
+**Step 4: Start Connector & Access UI**
+
+```bash
+# Start connector with client cert authentication
+.venv312/bin/python -m unified_connector --log-level INFO
+
+# Open browser
+open https://localhost:8000
+
+# Browser will prompt to select client certificate → Choose "client-admin"
+# Authenticated automatically with admin role
+```
+
+**Logs:**
+```
+INFO - TLS enabled with client certificate authentication required
+INFO - Loaded CA certificate for client verification: /Users/user/.unified_connector/certs/ca-cert.pem
+INFO - Web UI started on https://0.0.0.0:8000
+INFO - Client certificate authenticated: CN=client-admin, OU=admin, role=admin
+```
+
+**Step 5: Test Different Roles**
+
+Import multiple certificates to test role-based access:
+
+1. Import `client-admin.p12` → Full access (configure, delete sources)
+2. Import `client-operator.p12` → Can start/stop sources, cannot delete
+3. Import `client-viewer.p12` → Read-only access, no modifications
+
+Browser will prompt to select certificate each time you visit `https://localhost:8000`.
+
+#### Client Certificate Role Mapping
+
+The connector extracts **CN (Common Name)** and **OU (Organizational Unit)** from the client certificate and maps them to roles:
+
+**Method 1: OU-based Mapping (Preferred)**
+
+```yaml
+client_cert:
+  role_mappings:
+    admin: admin        # OU=admin → admin role
+    operator: operator  # OU=operator → operator role
+    viewer: viewer      # OU=viewer → viewer role
+```
+
+**Certificate Example:**
+```
+Subject: CN=john.doe, OU=operator, O=Company, C=US
+→ Extracted: OU=operator
+→ Role: operator
+```
+
+**Method 2: CN Pattern Matching**
+
+```yaml
+client_cert:
+  role_mappings:
+    client-admin: admin      # CN contains "client-admin" → admin role
+    admin: admin             # CN contains "admin" → admin role
+    monitoring-bot: viewer   # CN contains "monitoring-bot" → viewer role
+```
+
+**Certificate Example:**
+```
+Subject: CN=monitoring-bot.company.com, O=Company, C=US
+→ Extracted: CN=monitoring-bot.company.com
+→ Role: viewer (matched "monitoring-bot")
+```
+
+**Mapping Priority:**
+1. OU exact match (checked first)
+2. CN pattern match (substring search)
+3. `default_role: viewer` (fallback)
+
+#### Client Certificate Troubleshooting
+
+**Issue 1: Browser Doesn't Prompt for Certificate**
+
+**Cause 1:** Certificate not imported to browser/OS keychain.
+
+**Fix:** Double-click `.p12` file to import (see Step 3 above).
+
+**Cause 2:** `require_client_cert: false` in config.
+
+**Fix:** Set `require_client_cert: true` in `config.yaml` under `tls:`.
+
+**Cause 3:** Browser cached "no certificate" response.
+
+**Fix:** Clear browser cache and restart browser.
+
+**Issue 2: "SSL Handshake Failed" / "Certificate Verify Failed"**
+
+**Cause:** Client certificate not signed by CA that server trusts.
+
+**Fix:**
+1. Verify `ca_cert_file` path in config points to correct CA certificate
+2. Ensure client certificate was signed by that CA
+3. Check logs for CA cert loading:
+   ```
+   INFO - Loaded CA certificate for client verification: /path/to/ca-cert.pem
+   ```
+
+**Issue 3: "Forbidden - Insufficient Permissions"**
+
+**Cause:** Certificate authenticated but role mapping failed.
+
+**Fix:**
+1. Check certificate OU/CN fields:
+   ```bash
+   openssl pkcs12 -in client-admin.p12 -passin pass:demo123 -nokeys | openssl x509 -noout -subject
+   # Output: subject=CN=client-admin, OU=admin
+   ```
+2. Verify `role_mappings` in config matches OU/CN values (case-sensitive)
+3. Check logs for role extraction:
+   ```
+   INFO - Client certificate authenticated: CN=client-admin, OU=admin, role=admin
+   ```
+
+**Issue 4: "Untrusted Certificate" Warning in Browser**
+
+**Cause:** Server certificate is self-signed (expected for development).
+
+**Fix:**
+- **Development**: Click "Advanced" → "Proceed to localhost (unsafe)"
+- **Production**: Use CA-signed certificate from Let's Encrypt or corporate CA
+- **Trust CA Manually**: Import `ca-cert.pem` to OS trust store:
+  - macOS: Keychain Access → System → Import `ca-cert.pem` → Trust → Always Trust
+  - Linux: `sudo cp ca-cert.pem /usr/local/share/ca-certificates/ && sudo update-ca-certificates`
+  - Windows: certmgr.msc → Trusted Root CAs → Import
+
+---
+
+### Switching Between Authentication Methods
+
+To switch from OAuth2 to Client Certificate (or vice versa):
+
+**Step 1: Update config.yaml**
+
+```yaml
+authentication:
+  enabled: true
+  method: client_cert  # Change from 'oauth2' to 'client_cert' (or vice versa)
+```
+
+**Step 2: Update TLS Configuration**
+
+**For OAuth2 → Client Certificate:**
+```yaml
+tls:
+  enabled: true
+  require_client_cert: true  # Enable client cert requirement
+  ca_cert_file: "~/.unified_connector/certs/ca-cert.pem"  # Add CA cert path
+```
+
+**For Client Certificate → OAuth2:**
+```yaml
+tls:
+  enabled: true
+  require_client_cert: false  # Disable client cert requirement
+  # ca_cert_file can be removed or left (ignored if require_client_cert=false)
+```
+
+**Step 3: Restart Connector**
+
+```bash
+# Stop existing connector
+pkill -f "python -m unified_connector"
+
+# Start with new configuration
+.venv312/bin/python -m unified_connector --log-level INFO
+```
+
+**Step 4: Verify Logs**
+
+**OAuth2 Mode:**
+```
+INFO - Authentication enabled: oauth2
+INFO - OAuth provider: databricks
+INFO - Web UI started on https://0.0.0.0:8000
+```
+
+**Client Certificate Mode:**
+```
+INFO - Authentication enabled: client_cert
+INFO - TLS enabled with client certificate authentication required
+INFO - Loaded CA certificate for client verification
+INFO - Web UI started on https://0.0.0.0:8000
+```
+
+---
+
+### Disabling Authentication (Development Only)
+
+For **development/testing only**, you can disable authentication:
+
+```yaml
+authentication:
+  enabled: false  # WARNING: Do NOT use in production
+```
+
+**Security Warning:** Disabling authentication exposes the connector Web UI to **anyone with network access**. This is **NOT NIS2 compliant** and should only be used in isolated development environments.
+
+---
+
+### Credential Storage & Encryption
+
+All sensitive credentials (OAuth secrets, API keys) are stored encrypted:
+
+**Storage Location:** `~/.unified_connector/credentials.enc`
+
+**Encryption Details:**
+- **Algorithm:** AES-256-CBC with HMAC-SHA256 (encrypt-then-MAC)
+- **Key Derivation:** PBKDF2-HMAC-SHA256 with 480,000 iterations (OWASP 2023 standard)
+- **Master Password:** Set via `CONNECTOR_MASTER_PASSWORD` environment variable
+- **Per-Installation Salt:** Random 16-byte salt generated on first use
+- **File Permissions:** 0o600 (owner read/write only)
+
+**Usage Example:**
+
+```bash
+# Set master password (REQUIRED)
+export CONNECTOR_MASTER_PASSWORD='your-secure-password-here'
+
+# Start connector - will prompt for credentials on first run
+.venv312/bin/python -m unified_connector --log-level INFO
+
+# Enter credentials when prompted:
+# - OAuth Client ID: abc123...
+# - OAuth Client Secret: xyz789...
+# - Session Secret Key: [auto-generated if blank]
+
+# Credentials stored encrypted in ~/.unified_connector/credentials.enc
+```
+
+**Configuration Reference:**
+
+```yaml
+credentials:
+  storage:
+    type: encrypted
+    file: ~/.unified_connector/credentials.enc
+```
+
+**Using Environment Variables (Alternative):**
+
+```bash
+# Skip credential prompts by setting environment variables
+export OAUTH_CLIENT_ID='your-client-id'
+export OAUTH_CLIENT_SECRET='your-client-secret'
+export SESSION_SECRET_KEY='generate-with-openssl-rand-base64-32'
+export ZEROBUS_CLIENT_ID='your-zerobus-client-id'
+export ZEROBUS_CLIENT_SECRET='your-zerobus-client-secret'
+```
+
+**Credential References in config.yaml:**
+
+```yaml
+oauth:
+  client_id: ${credential:oauth.client_id}        # References encrypted store
+  client_secret: ${credential:oauth.client_secret}
+
+zerobus:
+  auth:
+    client_id: ${credential:zerobus.client_id}
+    client_secret: ${credential:zerobus.client_secret}
+```
+
+---
+
 ## 📚 Documentation
 
 ### Core Documentation

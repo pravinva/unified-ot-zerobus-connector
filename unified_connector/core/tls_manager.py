@@ -302,15 +302,17 @@ class TLSManager:
         self,
         cert_file: Optional[Path] = None,
         key_file: Optional[Path] = None,
-        require_client_cert: bool = False
+        require_client_cert: bool = False,
+        ca_cert_file: Optional[Path] = None
     ) -> ssl.SSLContext:
         """
         Create SSL context for web server.
 
         Args:
-            cert_file: Path to certificate file
-            key_file: Path to private key file
+            cert_file: Path to server certificate file
+            key_file: Path to server private key file
             require_client_cert: Require client certificate authentication
+            ca_cert_file: Path to CA certificate for verifying client certs
 
         Returns:
             SSL context configured for secure connections
@@ -352,8 +354,16 @@ class TLSManager:
 
             # Client certificate verification (optional)
             if require_client_cert:
+                if ca_cert_file and ca_cert_file.exists():
+                    # Load CA cert for verifying client certificates
+                    context.load_verify_locations(cafile=str(ca_cert_file))
+                    logger.info(f"Loaded CA certificate for client verification: {ca_cert_file}")
+                else:
+                    logger.warning("Client cert verification requested but no CA cert provided")
+
                 context.verify_mode = ssl.CERT_REQUIRED
                 context.check_hostname = False
+                logger.info("Client certificate authentication REQUIRED")
             else:
                 context.verify_mode = ssl.CERT_NONE
 
@@ -448,17 +458,34 @@ def create_ssl_context_from_config(config: Dict[str, Any]) -> Optional[ssl.SSLCo
 
     tls_manager = TLSManager()
 
-    # Get or create certificate
-    cert_file, key_file = tls_manager.get_or_create_certificate(
-        common_name=config.get('common_name', 'localhost'),
-        san_list=config.get('san_list')
-    )
+    # Check for custom certificate paths
+    custom_cert = config.get('cert_file')
+    custom_key = config.get('key_file')
+    ca_cert = config.get('ca_cert_file')
+
+    if custom_cert and custom_key:
+        # Use custom certificate paths
+        cert_file = Path(custom_cert).expanduser()
+        key_file = Path(custom_key).expanduser()
+        logger.info(f"Using custom TLS certificate: {cert_file}")
+    else:
+        # Get or create self-signed certificate
+        cert_file, key_file = tls_manager.get_or_create_certificate(
+            common_name=config.get('common_name', 'localhost'),
+            san_list=config.get('san_list')
+        )
+
+    # Prepare CA cert path if provided
+    ca_cert_file = None
+    if ca_cert:
+        ca_cert_file = Path(ca_cert).expanduser()
 
     # Create SSL context
     return tls_manager.create_ssl_context(
         cert_file=cert_file,
         key_file=key_file,
-        require_client_cert=config.get('require_client_cert', False)
+        require_client_cert=config.get('require_client_cert', False),
+        ca_cert_file=ca_cert_file
     )
 
 

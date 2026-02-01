@@ -1,8 +1,9 @@
 """
-Authentication module for Web UI using OAuth2/SAML.
+Authentication module for Web UI using OAuth2/SAML/Client Certificates.
 
 Supports:
-- OAuth2 authentication (Azure AD, Okta, Google)
+- OAuth2 authentication (Azure AD, Okta, Google, Databricks)
+- Client Certificate authentication (mutual TLS)
 - MFA verification from OAuth tokens
 - Session management with encrypted cookies
 - Login/logout flows
@@ -50,10 +51,13 @@ class AuthenticationManager:
             logger.info("Authentication disabled")
             return
 
-        self.method = config.get('method', 'oauth2')
+        self.method = config.get('method', 'oauth2')  # 'oauth2' or 'client_cert'
         self.oauth_config = config.get('oauth', {})
         self.session_config = config.get('session', {})
         self.rbac_config = config.get('rbac', {})
+
+        # Client certificate settings
+        self.client_cert_config = config.get('client_cert', {})
 
         # OAuth2 settings
         self.provider = self.oauth_config.get('provider', 'azure')
@@ -433,7 +437,7 @@ class AuthenticationManager:
 @web.middleware
 async def auth_middleware(request: web.Request, handler):
     """
-    Authentication middleware - check session for protected routes.
+    Authentication middleware - check session or client certificate for protected routes.
 
     Args:
         request: aiohttp Request
@@ -453,6 +457,17 @@ async def auth_middleware(request: web.Request, handler):
     if any(request.path.startswith(path) for path in public_paths):
         return await handler(request)
 
+    # Client certificate authentication
+    if auth_manager.method == 'client_cert':
+        user = await _authenticate_with_client_cert(request, auth_manager)
+        if user:
+            request['user'] = user
+            return await handler(request)
+        else:
+            logger.warning(f"Client certificate authentication failed for {request.path}")
+            raise web.HTTPUnauthorized(reason="Valid client certificate required")
+
+    # OAuth/Session-based authentication
     # Check session
     session = await get_session(request)
     user_data = session.get('user')
@@ -480,3 +495,83 @@ async def auth_middleware(request: web.Request, handler):
     request['user'].role = Role[user_data['role'].upper()]
 
     return await handler(request)
+
+
+async def _authenticate_with_client_cert(request: web.Request, auth_manager) -> Optional['User']:
+    """
+    Authenticate user based on client certificate.
+
+    Args:
+        request: aiohttp Request
+        auth_manager: AuthenticationManager instance
+
+    Returns:
+        User object if authenticated, None otherwise
+    """
+    # Get client certificate from SSL transport
+    transport = request.transport
+    if not transport:
+        return None
+
+    ssl_object = transport.get_extra_info('ssl_object')
+    if not ssl_object:
+        return None
+
+    # Get peer certificate
+    try:
+        peer_cert_bin = ssl_object.getpeercert(binary_form=True)
+        if not peer_cert_bin:
+            return None
+
+        # Parse certificate
+        from cryptography import x509
+        from cryptography.hazmat.backends import default_backend
+
+        cert = x509.load_der_x509_certificate(peer_cert_bin, default_backend())
+
+        # Extract subject fields
+        subject = cert.subject
+        cn = subject.get_attributes_for_oid(x509.oid.NameOID.COMMON_NAME)[0].value
+
+        # Try to extract OU (organizational unit) for role mapping
+        ou_attrs = subject.get_attributes_for_oid(x509.oid.NameOID.ORGANIZATIONAL_UNIT_NAME)
+        ou = ou_attrs[0].value if ou_attrs else None
+
+        # Map OU or CN to role
+        role_mappings = auth_manager.client_cert_config.get('role_mappings', {})
+        default_role = auth_manager.client_cert_config.get('default_role', 'viewer')
+
+        # Try OU first, then CN pattern matching
+        role_name = None
+        if ou and ou in role_mappings:
+            role_name = role_mappings[ou]
+        else:
+            # Check CN patterns (e.g., "client-admin" -> "admin")
+            for pattern, role in role_mappings.items():
+                if pattern in cn.lower():
+                    role_name = role
+                    break
+
+        if not role_name:
+            role_name = default_role
+
+        # Create User object
+        from unified_connector.web.rbac import User
+        user = User(
+            email=cn,  # Use CN as email/identifier
+            name=cn,
+            groups=[ou] if ou else [],
+            role_mappings={},
+            default_role=default_role
+        )
+
+        # Set role from mapping
+        from unified_connector.web.rbac import Role
+        user.role = Role[role_name.upper()]
+
+        logger.info(f"Client certificate authenticated: CN={cn}, OU={ou}, role={role_name}")
+        return user
+
+    except Exception as e:
+        logger.error(f"Failed to parse client certificate: {e}", exc_info=True)
+        return None

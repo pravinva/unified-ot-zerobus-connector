@@ -36,9 +36,9 @@ async function apiFetch(path, options = {}) {
     ...options,
   });
 
-  // Handle 401 Unauthorized - redirect to login
+  // Handle 401 Unauthorized - throw error but don't redirect
+  // (let checkAuth() handle the redirect logic based on auth_enabled)
   if (resp.status === 401) {
-    window.location.href = "/static/login.html";
     throw new Error("Authentication required");
   }
 
@@ -668,6 +668,14 @@ async function refreshAll() {
 async function checkAuth() {
   try {
     const authStatus = await apiFetch("/api/auth/status");
+
+    // If authentication is disabled, skip auth check
+    if (!authStatus.auth_enabled) {
+      console.log("Authentication disabled - bypassing auth check");
+      return true;
+    }
+
+    // If authentication is enabled, check if user is authenticated
     if (!authStatus.authenticated) {
       window.location.href = "/static/login.html";
       return false;
@@ -683,6 +691,16 @@ async function checkAuth() {
 
 async function loadUserPermissions() {
   try {
+    const authStatus = await apiFetch("/api/auth/status");
+
+    // If authentication is disabled, grant all permissions
+    if (!authStatus.auth_enabled) {
+      userPermissions = ["read", "write", "configure", "start_stop", "delete", "manage_users"];
+      console.log("Authentication disabled - granting all permissions");
+      return true;
+    }
+
+    // If authentication is enabled, load user permissions
     const permData = await apiFetch("/api/auth/permissions");
     userPermissions = permData.permissions || [];
     return true;
