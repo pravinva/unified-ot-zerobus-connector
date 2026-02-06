@@ -339,15 +339,12 @@ class OPCUASimulator:
 
             # Register all sensors with the mode first
             for sensor_path, simulator in self.simulators.items():
-                # Get PLC if available
+                # Get PLC if available using the correct method
                 plc = None
                 if self.simulator_manager and hasattr(self.simulator_manager, 'plc_manager'):
                     plc_mgr = self.simulator_manager.plc_manager
-                    if plc_mgr:
-                        for p in plc_mgr.plcs.values():
-                            if sensor_path in p.sensor_mappings:
-                                plc = p
-                                break
+                    if plc_mgr and hasattr(plc_mgr, 'get_plc_for_sensor'):
+                        plc = plc_mgr.get_plc_for_sensor(sensor_path)
 
                 mode.register_sensor(sensor_path, plc_instance=plc)
 
