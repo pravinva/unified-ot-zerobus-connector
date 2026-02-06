@@ -27,6 +27,17 @@ except ImportError:
 
 from ot_simulator.config_loader import MQTTConfig
 from ot_simulator.sensor_models import IndustryType, SensorSimulator, get_industry_sensors
+from ot_simulator.plc_models import PLCQualityCode
+
+# Import vendor mode integration
+try:
+    from ot_simulator.vendor_modes.integration import VendorModeIntegration
+    from ot_simulator.vendor_modes.base import VendorModeType
+    VENDOR_MODES_AVAILABLE = True
+except ImportError:
+    VendorModeIntegration = None  # type: ignore
+    VendorModeType = None  # type: ignore
+    VENDOR_MODES_AVAILABLE = False
 
 logger = logging.getLogger("ot_simulator.mqtt")
 
@@ -34,7 +45,7 @@ logger = logging.getLogger("ot_simulator.mqtt")
 class MQTTSimulator:
     """MQTT publisher simulator with realistic sensor data."""
 
-    def __init__(self, config: MQTTConfig):
+    def __init__(self, config: MQTTConfig, simulator_manager=None):
         if aiomqtt is None:
             raise ImportError("aiomqtt package required. Install with: pip install aiomqtt")
 
@@ -43,6 +54,8 @@ class MQTTSimulator:
         self.client: aiomqtt.Client | None = None
         self._running = False
         self._message_count = 0
+        self.simulator_manager = simulator_manager
+        self.vendor_integration: VendorModeIntegration | None = None
 
     async def init(self):
         """Initialize MQTT client and sensors."""
@@ -63,6 +76,16 @@ class MQTTSimulator:
         logger.info(
             f"Initialized MQTT publisher with {len(self.simulators)} sensors across {len(industry_types)} industries"
         )
+
+        # Initialize vendor mode integration if available
+        if VENDOR_MODES_AVAILABLE and self.simulator_manager:
+            try:
+                self.vendor_integration = VendorModeIntegration(self.simulator_manager)
+                await self.vendor_integration.initialize()
+                logger.info("✓ Vendor mode integration initialized for MQTT")
+            except Exception as e:
+                logger.warning(f"Failed to initialize vendor modes: {e}")
+                self.vendor_integration = None
 
     async def start(self):
         """Start publishing sensor data to MQTT broker.
@@ -110,6 +133,10 @@ class MQTTSimulator:
             async with self.client:
                 logger.info(f"MQTT client connected to {broker_host}:{broker_port}")
                 self._running = True
+
+                # Publish Sparkplug B BIRTH messages if vendor modes enabled
+                if self.vendor_integration:
+                    await self._publish_birth_messages()
 
                 try:
                     # Calculate publish interval
@@ -213,16 +240,63 @@ class MQTTSimulator:
             logger.info("MQTT broker will not be started - clients can connect to external broker")
 
     async def _publish_sensor(self, path: str, simulator: SensorSimulator):
-        """Publish a single sensor update."""
+        """Publish a single sensor update.
+
+        If vendor modes are enabled, publishes to all vendor-specific topics.
+        Otherwise, uses legacy format.
+        """
         if self.client is None:
             return
 
         # Update sensor value
         value = simulator.update()
+        timestamp = time.time()
 
         # Split path into industry/sensor
         industry, sensor_name = path.split("/", 1)
 
+        # If vendor modes are enabled, use multi-vendor publishing
+        if self.vendor_integration:
+            try:
+                # Get PLC quality code (default to GOOD if not available)
+                quality = PLCQualityCode.GOOD
+                if self.simulator_manager and hasattr(self.simulator_manager, 'plc_manager'):
+                    plc_mgr = self.simulator_manager.plc_manager
+                    if plc_mgr:
+                        # Try to get quality from PLC
+                        for plc in plc_mgr.plcs.values():
+                            if path in plc.sensor_mappings:
+                                quality = plc.quality_code
+                                break
+
+                # Format sensor data for all enabled vendor modes
+                vendor_data = self.vendor_integration.format_sensor_data(
+                    sensor_path=path,
+                    value=value,
+                    quality=quality,
+                    timestamp=timestamp
+                )
+
+                # Publish to each vendor mode's topic
+                for mode_type, formatted_data in vendor_data.items():
+                    if formatted_data:
+                        # Get vendor-specific MQTT topic
+                        topic = self.vendor_integration.get_mqtt_topic(
+                            path,
+                            mode_type
+                        )
+
+                        # Convert formatted data to payload
+                        payload = json.dumps(formatted_data).encode("utf-8")
+
+                        await self.client.publish(topic, payload=payload, qos=self.config.qos)
+                        self._message_count += 1
+
+                return  # Done with vendor mode publishing
+            except Exception as e:
+                logger.error(f"Error in vendor mode publishing for {path}: {e}, falling back to legacy")
+
+        # Legacy publishing (fallback if vendor modes not available or error)
         # Create topic
         topic_base = f"{self.config.topic_prefix}/{industry}/{sensor_name}"
 
@@ -285,6 +359,61 @@ class MQTTSimulator:
             qos=self.config.qos,
             retain=False,
         )
+
+    async def _publish_birth_messages(self):
+        """Publish Sparkplug B BIRTH messages for all vendor modes that support it.
+
+        This is called once when the MQTT client connects to announce all available sensors.
+        """
+        if not self.vendor_integration or not self.client:
+            return
+
+        try:
+            # Get active modes
+            active_modes = self.vendor_integration.mode_manager.get_active_modes()
+
+            for mode in active_modes:
+                mode_type = mode.config.mode_type
+
+                # Check if this mode supports BIRTH messages (Sparkplug B)
+                if mode_type == VendorModeType.SPARKPLUG_B:
+                    try:
+                        # Generate and publish NBIRTH (Node BIRTH)
+                        nbirth = mode.generate_nbirth()
+                        if nbirth:
+                            nbirth_topic = mode.get_nbirth_topic()
+                            nbirth_payload = json.dumps(nbirth).encode("utf-8")
+                            await self.client.publish(nbirth_topic, nbirth_payload, qos=1)
+                            logger.info(f"Published Sparkplug B NBIRTH to {nbirth_topic}")
+
+                        # Generate and publish DBIRTH (Device BIRTH) for each device
+                        # Register all sensors first
+                        for sensor_path in self.simulators.keys():
+                            # Get PLC if available for quality code
+                            plc = None
+                            if self.simulator_manager and hasattr(self.simulator_manager, 'plc_manager'):
+                                plc_mgr = self.simulator_manager.plc_manager
+                                if plc_mgr:
+                                    for p in plc_mgr.plcs.values():
+                                        if sensor_path in p.sensor_mappings:
+                                            plc = p
+                                            break
+
+                            mode.register_sensor(sensor_path, plc_instance=plc)
+
+                        # Get device DBIRTHs
+                        dbirths = mode.get_device_dbirths()
+                        for device_name, dbirth in dbirths.items():
+                            dbirth_topic = mode.get_dbirth_topic(device_name)
+                            dbirth_payload = json.dumps(dbirth).encode("utf-8")
+                            await self.client.publish(dbirth_topic, dbirth_payload, qos=1)
+                            logger.info(f"Published Sparkplug B DBIRTH for device {device_name}")
+
+                    except Exception as e:
+                        logger.error(f"Error publishing BIRTH messages for {mode_type}: {e}")
+
+        except Exception as e:
+            logger.error(f"Error in _publish_birth_messages: {e}")
 
     def _create_json_payload(self, simulator: SensorSimulator, value: float) -> dict[str, Any]:
         """Create JSON payload for sensor value."""

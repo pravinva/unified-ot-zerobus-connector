@@ -74,7 +74,7 @@ class SimulatorManager:
             if not self.config.mqtt.enabled:
                 logger.warning("MQTT requested but disabled in config")
             else:
-                mqtt_sim = MQTTSimulator(self.config.mqtt)
+                mqtt_sim = MQTTSimulator(self.config.mqtt, simulator_manager=self.unified_manager)
                 self.simulators["mqtt"] = mqtt_sim
                 task = asyncio.create_task(mqtt_sim.start(), name="mqtt-simulator")
                 self.tasks.append(task)
@@ -332,6 +332,9 @@ async def run_web_ui(config: SimulatorConfig, manager: SimulatorManager, port: i
     # Create enhanced web UI
     web_ui = EnhancedWebUI(config, unified_manager)
     app = web_ui.app
+
+    # Initialize async components (e.g., vendor integration)
+    await web_ui.initialize()
 
     # Initialize LLM agent for natural language (before starting server)
     try:

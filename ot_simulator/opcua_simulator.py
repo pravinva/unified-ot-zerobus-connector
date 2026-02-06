@@ -26,6 +26,16 @@ from ot_simulator.opcua_security import (
     create_security_config_from_dict,
 )
 
+# Import vendor mode integration
+try:
+    from ot_simulator.vendor_modes.integration import VendorModeIntegration
+    from ot_simulator.vendor_modes.base import VendorModeType
+    VENDOR_MODES_AVAILABLE = True
+except ImportError:
+    VendorModeIntegration = None  # type: ignore
+    VendorModeType = None  # type: ignore
+    VENDOR_MODES_AVAILABLE = False
+
 logger = logging.getLogger("ot_simulator.opcua")
 
 
@@ -59,6 +69,7 @@ class OPCUASimulator:
         self._server_task = None
         self._initialized = False  # Track if init() completed successfully
         self.simulator_manager = simulator_manager  # Reference to SimulatorManager for PLC access
+        self.vendor_integration: VendorModeIntegration | None = None
 
         # Initialize security manager
         self.security_manager = OPCUASecurityManager(self.security_config)
@@ -113,6 +124,16 @@ class OPCUASimulator:
                 and self.simulator_manager.plc_manager.enabled
             )
 
+            # Initialize vendor mode integration if available
+            if VENDOR_MODES_AVAILABLE and self.simulator_manager:
+                try:
+                    self.vendor_integration = VendorModeIntegration(self.simulator_manager)
+                    await self.vendor_integration.initialize()
+                    logger.info("✓ Vendor mode integration initialized for OPC UA")
+                except Exception as e:
+                    logger.warning(f"Failed to initialize vendor modes: {e}")
+                    self.vendor_integration = None
+
             # Create BOTH structures for maximum flexibility
             logger.info("Creating dual node structure (PLCs + Industries)")
             await self._create_direct_sensor_nodes(idx)  # IndustrialSensors view
@@ -122,6 +143,11 @@ class OPCUASimulator:
                 await self._create_plc_based_nodes(idx)  # PLCs view
             else:
                 logger.info("PLC Manager not available - only IndustrialSensors view created")
+
+            # Create vendor-specific node structures if enabled
+            if self.vendor_integration:
+                logger.info("Creating vendor-specific node structures")
+                await self._create_vendor_mode_nodes(idx)
 
             self._initialized = True
             logger.info(
@@ -285,6 +311,219 @@ class OPCUASimulator:
 
                 if (j + 1) % 10 == 0:
                     logger.info(f"    Created {j+1}/{len(sensors)} sensors for {industry_name}")
+
+    async def _create_vendor_mode_nodes(self, idx: int):
+        """Create vendor-specific OPC UA node structures.
+
+        Creates separate node hierarchies for each enabled vendor mode:
+        - Kepware: Channel.Device.Tag structure
+        - Sparkplug B: Group/Edge Node/Device structure (mostly MQTT, but OPC UA nodes for reference)
+        - Honeywell: Server.Module.Point structure with composite attributes
+        - Generic: Simple flat structure
+        """
+        if not self.vendor_integration:
+            return
+
+        root = await self.server.nodes.objects.add_object(idx, "VendorModes")
+        logger.info("Creating vendor-specific node structures...")
+
+        active_modes = self.vendor_integration.mode_manager.get_active_modes()
+
+        for mode in active_modes:
+            mode_type = mode.config.mode_type
+            mode_name = mode_type.value.replace('_', ' ').title()
+
+            # Create mode root folder
+            mode_root = await root.add_object(idx, mode_name)
+            logger.info(f"  Creating {mode_name} node structure...")
+
+            # Register all sensors with the mode first
+            for sensor_path, simulator in self.simulators.items():
+                # Get PLC if available
+                plc = None
+                if self.simulator_manager and hasattr(self.simulator_manager, 'plc_manager'):
+                    plc_mgr = self.simulator_manager.plc_manager
+                    if plc_mgr:
+                        for p in plc_mgr.plcs.values():
+                            if sensor_path in p.sensor_mappings:
+                                plc = p
+                                break
+
+                mode.register_sensor(sensor_path, plc_instance=plc)
+
+            # Create vendor-specific node structure
+            if mode_type == VendorModeType.KEPWARE:
+                await self._create_kepware_nodes(idx, mode_root, mode)
+            elif mode_type == VendorModeType.SPARKPLUG_B:
+                await self._create_sparkplug_nodes(idx, mode_root, mode)
+            elif mode_type == VendorModeType.HONEYWELL:
+                await self._create_honeywell_nodes(idx, mode_root, mode)
+            elif mode_type == VendorModeType.GENERIC:
+                await self._create_generic_nodes(idx, mode_root, mode)
+
+        logger.info(f"✓ Created vendor-specific nodes for {len(active_modes)} modes")
+
+    async def _create_kepware_nodes(self, idx: int, parent: Node, mode):
+        """Create Kepware Channel.Device.Tag structure."""
+        # Get channels from mode
+        channels = getattr(mode, 'channels', {})
+
+        for channel_name, channel_info in channels.items():
+            channel_node = await parent.add_object(idx, channel_name)
+
+            # Get devices in this channel
+            devices = channel_info.get('devices', {})
+            for device_name, device_info in devices.items():
+                device_node = await channel_node.add_object(idx, device_name)
+
+                # Get sensors for this device
+                sensors = device_info.get('sensors', [])
+                for sensor_path in sensors:
+                    if sensor_path in self.simulators:
+                        simulator = self.simulators[sensor_path]
+
+                        # Get tag name (CamelCase conversion)
+                        tag_name = sensor_path.split('/')[-1]
+                        tag_name = ''.join(word.capitalize() for word in tag_name.split('_'))
+
+                        # Create tag node
+                        tag_node = await device_node.add_variable(
+                            idx,
+                            tag_name,
+                            simulator.get_value(),
+                            varianttype=ua.VariantType.Double,
+                        )
+                        await tag_node.set_writable()
+
+                        # Store with vendor-specific path
+                        vendor_path = f"vendor_kepware_{channel_name}_{device_name}_{tag_name}"
+                        self.nodes[vendor_path] = tag_node
+
+        logger.info(f"    Created Kepware structure: {len(channels)} channels")
+
+    async def _create_sparkplug_nodes(self, idx: int, parent: Node, mode):
+        """Create Sparkplug B Group/EdgeNode/Device structure."""
+        # Sparkplug B is primarily MQTT-based, but we create OPC UA nodes for reference
+        group_id = getattr(mode, 'group_id', 'DatabricksDemo')
+        edge_node_id = getattr(mode, 'edge_node_id', 'OTSimulator01')
+
+        # Create group node
+        group_node = await parent.add_object(idx, group_id)
+        edge_node = await group_node.add_object(idx, edge_node_id)
+
+        # Get devices
+        devices = getattr(mode, 'devices', {})
+        for device_name, device_info in devices.items():
+            device_node = await edge_node.add_object(idx, device_name)
+
+            sensors = device_info.get('sensors', [])
+            for sensor_path in sensors:
+                if sensor_path in self.simulators:
+                    simulator = self.simulators[sensor_path]
+
+                    # Get metric name
+                    metric_name = sensor_path.replace('/', '/')
+
+                    # Create metric node
+                    metric_node = await device_node.add_variable(
+                        idx,
+                        metric_name,
+                        simulator.get_value(),
+                        varianttype=ua.VariantType.Double,
+                    )
+                    await metric_node.set_writable()
+
+                    # Store with vendor-specific path
+                    vendor_path = f"vendor_sparkplug_{device_name}_{metric_name}"
+                    self.nodes[vendor_path] = metric_node
+
+        logger.info(f"    Created Sparkplug B structure: {len(devices)} devices")
+
+    async def _create_honeywell_nodes(self, idx: int, parent: Node, mode):
+        """Create Honeywell Experion Server.Module.Point structure with composite attributes."""
+        server_name = getattr(mode, 'server_name', 'EXPERION_PKS')
+        server_node = await parent.add_object(idx, server_name)
+
+        # Get modules
+        modules = getattr(mode, 'modules', {})
+        for module_name, module_info in modules.items():
+            module_node = await server_node.add_object(idx, module_name)
+
+            points = module_info.get('points', [])
+            for sensor_path in points:
+                if sensor_path in self.simulators:
+                    simulator = self.simulators[sensor_path]
+
+                    # Get abbreviated point name
+                    point_name = sensor_path.split('/')[-1].upper()
+                    # Abbreviate if needed (e.g., CRUSHER -> CRUSH)
+                    if len(point_name) > 12:
+                        point_name = point_name[:12]
+
+                    # Create point folder
+                    point_node = await module_node.add_object(idx, point_name)
+
+                    # Create composite attributes (PV, PVEUHI, PVEULO, etc.)
+                    value = simulator.get_value()
+                    config = simulator.config
+
+                    # PV (Process Value)
+                    pv_node = await point_node.add_variable(
+                        idx, "PV", value, varianttype=ua.VariantType.Double
+                    )
+                    await pv_node.set_writable()
+
+                    # PVEUHI (Engineering Units High)
+                    await point_node.add_variable(
+                        idx, "PVEUHI", config.max_value, varianttype=ua.VariantType.Double
+                    )
+
+                    # PVEULO (Engineering Units Low)
+                    await point_node.add_variable(
+                        idx, "PVEULO", config.min_value, varianttype=ua.VariantType.Double
+                    )
+
+                    # PVUNITS (Engineering Units)
+                    await point_node.add_variable(
+                        idx, "PVUNITS", config.unit, varianttype=ua.VariantType.String
+                    )
+
+                    # PVBAD (Bad quality flag)
+                    await point_node.add_variable(
+                        idx, "PVBAD", False, varianttype=ua.VariantType.Boolean
+                    )
+
+                    # Store PV node for updates
+                    vendor_path = f"vendor_honeywell_{module_name}_{point_name}_PV"
+                    self.nodes[vendor_path] = pv_node
+
+        logger.info(f"    Created Honeywell structure: {len(modules)} modules")
+
+    async def _create_generic_nodes(self, idx: int, parent: Node, mode):
+        """Create Generic vendor mode structure (simple flat structure)."""
+        # Group by industry
+        for industry in self.industries:
+            industry_name = industry.value if hasattr(industry, 'value') else industry
+            industry_node = await parent.add_object(idx, industry_name)
+
+            for sensor_path, simulator in self.simulators.items():
+                if sensor_path.startswith(f"{industry_name}/"):
+                    sensor_name = sensor_path.split('/')[-1]
+
+                    # Create sensor node
+                    sensor_node = await industry_node.add_variable(
+                        idx,
+                        sensor_name,
+                        simulator.get_value(),
+                        varianttype=ua.VariantType.Double,
+                    )
+                    await sensor_node.set_writable()
+
+                    # Store with vendor-specific path
+                    vendor_path = f"vendor_generic_{industry_name}_{sensor_name}"
+                    self.nodes[vendor_path] = sensor_node
+
+        logger.info(f"    Created Generic structure for {len(self.industries)} industries")
 
     async def _run_server_loop(self):
         """Internal method: Run the OPC-UA server update loop."""

@@ -15,6 +15,16 @@ from ot_simulator.web_ui.wot_browser import handle_wot_browser
 from ot_simulator.web_ui.templates import get_main_page_html
 from ot_simulator.training_api import TrainingAPIHandler
 
+# Import vendor mode API routes
+try:
+    from ot_simulator.vendor_modes.api_routes import VendorModeAPIRoutes
+    from ot_simulator.vendor_modes.integration import VendorModeIntegration
+    VENDOR_MODES_AVAILABLE = True
+except ImportError:
+    VendorModeAPIRoutes = None  # type: ignore
+    VendorModeIntegration = None  # type: ignore
+    VENDOR_MODES_AVAILABLE = False
+
 if TYPE_CHECKING:
     from ot_simulator.simulator_manager import SimulatorManager
 
@@ -41,8 +51,44 @@ class EnhancedWebUI:
         self.opcua_browser = OPCUABrowser(config, simulator_manager)
         self.training_api = TrainingAPIHandler(simulator_manager)
 
+        # Initialize vendor mode API routes if available
+        self.vendor_mode_api = None
+        self.vendor_integration = None
+        if VENDOR_MODES_AVAILABLE and simulator_manager:
+            # Try to get existing vendor integration from protocol simulators
+            vendor_integration = None
+            for protocol in ['opcua', 'mqtt']:
+                sim = simulator_manager.simulators.get(protocol)
+                if sim and hasattr(sim, 'vendor_integration') and sim.vendor_integration:
+                    vendor_integration = sim.vendor_integration
+                    break
+
+            # If not found, create new vendor integration
+            if not vendor_integration:
+                try:
+                    vendor_integration = VendorModeIntegration(simulator_manager)
+                    # Note: Will need to call await vendor_integration.initialize() later
+                    self.vendor_integration = vendor_integration
+                except Exception as e:
+                    import logging
+                    logging.getLogger("ot_simulator.web_ui").warning(f"Failed to create vendor integration: {e}")
+
+            if vendor_integration:
+                self.vendor_mode_api = VendorModeAPIRoutes(vendor_integration)
+
         # Setup routes
         self._setup_routes()
+
+    async def initialize(self):
+        """Initialize async components (like vendor integration)."""
+        if self.vendor_integration and not hasattr(self.vendor_integration, '_initialized'):
+            try:
+                await self.vendor_integration.initialize()
+                # Mark as initialized to avoid re-init
+                self.vendor_integration._initialized = True
+            except Exception as e:
+                import logging
+                logging.getLogger("ot_simulator.web_ui").error(f"Failed to initialize vendor integration: {e}")
 
     def _setup_routes(self):
         """Setup HTTP routes."""
@@ -68,6 +114,10 @@ class EnhancedWebUI:
 
         # Training API endpoints
         self.training_api.register_routes(self.app)
+
+        # Vendor mode API endpoints
+        if self.vendor_mode_api:
+            self.vendor_mode_api.setup_routes(self.app)
 
     async def handle_index(self, request: web.Request) -> web.Response:
         """Serve enhanced professional UI with real-time charts and NLP."""
