@@ -149,10 +149,18 @@ class KepwareMode(VendorMode):
     def _load_channel_mappings(self, mappings: Dict[str, Any]):
         """Load channel mappings from configuration."""
         for channel_cfg in mappings.get("channels", []):
+            # Get PLC vendor, default to siemens if not specified or invalid
+            plc_vendor_str = channel_cfg.get("plc_vendor", "siemens")
+            try:
+                plc_vendor = PLCVendor(plc_vendor_str)
+            except ValueError:
+                logger.warning(f"Invalid PLC vendor '{plc_vendor_str}', defaulting to siemens")
+                plc_vendor = PLCVendor.SIEMENS
+
             channel = KepwareChannel(
                 name=channel_cfg["name"],
                 driver_type=channel_cfg.get("driver_type", "Generic"),
-                plc_vendor=PLCVendor(channel_cfg.get("plc_vendor", "generic")),
+                plc_vendor=plc_vendor,
                 plc_model=channel_cfg.get("plc_model", "Generic"),
             )
 

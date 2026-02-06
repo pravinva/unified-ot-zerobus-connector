@@ -136,8 +136,8 @@ class VendorModeIntegration:
         # Get PLC instance for this sensor (if PLC manager enabled)
         plc_instance = None
         if self.simulator_manager.plc_manager:
-            # Find which PLC handles this industry
-            plc_instance = self.simulator_manager.plc_manager.get_plc_for_industry(industry)
+            # Find which PLC handles this sensor
+            plc_instance = self.simulator_manager.plc_manager.get_plc_for_sensor(sensor_path)
 
         # Register with each enabled mode
         for mode in self.mode_manager.get_active_modes():
@@ -360,6 +360,18 @@ class VendorModeIntegration:
     def get_all_mode_status(self) -> Dict[str, Any]:
         """Get status of all vendor modes."""
         return self.mode_manager.get_all_status()
+
+    def get_mode_status(self, mode_type: VendorModeType) -> Dict[str, Any]:
+        """Get status of a specific vendor mode."""
+        all_status = self.mode_manager.get_all_status()
+        return all_status.get(mode_type.value, {})
+
+    def get_mode_diagnostics(self, mode_type: VendorModeType) -> Dict[str, Any]:
+        """Get diagnostics for a specific vendor mode."""
+        mode = self.mode_manager.get_mode(mode_type)
+        if mode and hasattr(mode, 'get_diagnostics'):
+            return mode.get_diagnostics()
+        return {}
 
     async def enable_mode(self, mode_type: VendorModeType) -> bool:
         """Enable a vendor mode dynamically."""
