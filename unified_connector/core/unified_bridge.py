@@ -94,10 +94,73 @@ class UnifiedBridge:
         self.reconnect_max_delay_sec = 300.0
         self.reconnect_multiplier = 2.0
 
+        # Per-vendor pipeline stages - separate tracking for each vendor format
+        from collections import deque
+        self.vendor_pipelines = {
+            'kepware': {
+                'raw_protocol': deque(maxlen=3),
+                'after_vendor_detection': deque(maxlen=3),
+                'after_normalization': deque(maxlen=3),
+                'zerobus_batch': deque(maxlen=3),
+                'record_count': 0
+            },
+            'sparkplug_b': {
+                'raw_protocol': deque(maxlen=3),
+                'after_vendor_detection': deque(maxlen=3),
+                'after_normalization': deque(maxlen=3),
+                'zerobus_batch': deque(maxlen=3),
+                'record_count': 0
+            },
+            'honeywell': {
+                'raw_protocol': deque(maxlen=3),
+                'after_vendor_detection': deque(maxlen=3),
+                'after_normalization': deque(maxlen=3),
+                'zerobus_batch': deque(maxlen=3),
+                'record_count': 0
+            },
+            'opcua': {
+                'raw_protocol': deque(maxlen=3),
+                'after_vendor_detection': deque(maxlen=3),
+                'after_normalization': deque(maxlen=3),
+                'zerobus_batch': deque(maxlen=3),
+                'record_count': 0
+            },
+            'modbus': {
+                'raw_protocol': deque(maxlen=3),
+                'after_vendor_detection': deque(maxlen=3),
+                'after_normalization': deque(maxlen=3),
+                'zerobus_batch': deque(maxlen=3),
+                'record_count': 0
+            },
+            'generic': {
+                'raw_protocol': deque(maxlen=3),
+                'after_vendor_detection': deque(maxlen=3),
+                'after_normalization': deque(maxlen=3),
+                'zerobus_batch': deque(maxlen=3),
+                'record_count': 0
+            },
+            'unknown': {
+                'raw_protocol': deque(maxlen=3),
+                'after_vendor_detection': deque(maxlen=3),
+                'after_normalization': deque(maxlen=3),
+                'zerobus_batch': deque(maxlen=3),
+                'record_count': 0
+            }
+        }
+
         # Metrics
         self.metrics = {
             'records_received': 0,
             'records_normalized': 0,
+            'vendor_formats': {
+                'kepware': 0,
+                'sparkplug_b': 0,
+                'honeywell': 0,
+                'opcua': 0,
+                'modbus': 0,
+                'generic': 0,
+                'unknown': 0
+            },
             'records_enqueued': 0,
             'records_dropped': 0,
             'batches_sent': 0,
@@ -402,6 +465,66 @@ class UnifiedBridge:
         self.clients.pop(source_name, None)
         return {'status': 'ok', 'message': f"Source stopped: {source_name}"}
 
+    def _detect_vendor_format(self, record) -> str:
+        """Detect vendor format from record characteristics.
+
+        Args:
+            record: Protocol record (ProtocolRecord object or dict)
+
+        Returns:
+            Detected format: 'kepware', 'sparkplug_b', 'honeywell', 'opcua', 'modbus', 'generic', or 'unknown'
+        """
+        # Handle both dict and ProtocolRecord
+        if isinstance(record, dict):
+            topic = record.get('topic_or_path', '') or ""
+            metadata = record.get('metadata', {}) or {}
+            protocol = record.get('protocol', '') or record.get('protocol_type', '')
+        else:
+            topic = getattr(record, 'topic_or_path', '') or ""
+            metadata = getattr(record, 'metadata', {}) or {}
+            protocol_type = getattr(record, 'protocol_type', None)
+            protocol = protocol_type.value if hasattr(protocol_type, 'value') else str(protocol_type) if protocol_type else ''
+
+        # Sparkplug B detection: SparkplugB namespace or bdSeq/seq metadata
+        if "SparkplugB" in topic or "sparkplug" in topic.lower():
+            return "sparkplug_b"
+        if "bdSeq" in metadata or "seq" in metadata:
+            return "sparkplug_b"
+        if any(msgtype in topic for msgtype in ["NBIRTH", "DBIRTH", "NDATA", "DDATA", "NDEATH", "DDEATH"]):
+            return "sparkplug_b"
+
+        # Kepware detection: Check for kepware in path (supports both MQTT and OPC UA)
+        if "kepware" in topic.lower():
+            return "kepware"
+        # Kepware detection: Channel.Device.Tag pattern (MQTT-based)
+        if "Siemens_S7" in topic or "Allen_Bradley" in topic or "Modicon" in topic:
+            return "kepware"
+        # Kepware IoT Gateway format check
+        if "." in topic and topic.count(".") >= 2:  # Channel.Device.Tag has at least 2 dots
+            parts = topic.split(".")
+            if len(parts) >= 3 and all(p.replace("_", "").replace("-", "").isalnum() for p in parts[:3]):
+                return "kepware"
+
+        # Honeywell detection: Check for honeywell in path (supports both MQTT and OPC UA)
+        if "honeywell" in topic.lower():
+            return "honeywell"
+        if any(suffix in topic for suffix in [".PV", ".SP", ".OP", ".MODE", "/PV", "/SP", "/OP", "/MODE"]):
+            return "honeywell"
+        if "FIM" in topic or "AIM" in topic or "PID" in topic or "EXPERION" in topic:
+            return "honeywell"
+
+        # Protocol-based detection for native protocols (OPC UA, Modbus)
+        if protocol and 'opcua' in protocol.lower():
+            return "opcua"
+        if protocol and 'modbus' in protocol.lower():
+            return "modbus"
+
+        # Generic format
+        if "/" in topic:  # Simple path-based format
+            return "generic"
+
+        return "unknown"
+
     def _on_record(self, record: ProtocolRecord):
         """Callback when protocol client receives a record.
 
@@ -410,27 +533,96 @@ class UnifiedBridge:
         """
         self.metrics['records_received'] += 1
 
+        # Detect vendor format first
+        vendor_format = self._detect_vendor_format(record)
+        self.metrics['vendor_formats'][vendor_format] += 1
+
+        # Increment per-vendor record count
+        self.vendor_pipelines[vendor_format]['record_count'] += 1
+
+        # Stage 1: Capture raw protocol message (per-vendor)
+        try:
+            # Handle both ProtocolRecord objects and dict objects
+            if isinstance(record, dict):
+                raw_message = {
+                    'timestamp': time.time(),
+                    'source_name': record.get('source_name', 'unknown'),
+                    'protocol': record.get('protocol', 'unknown'),
+                    'topic_or_path': record.get('topic_or_path', ''),
+                    'value': record.get('value'),
+                    'quality': record.get('quality', 'UNKNOWN'),
+                    'metadata': record.get('metadata', {}),
+                    'vendor_format': vendor_format
+                }
+            else:
+                raw_message = {
+                    'timestamp': time.time(),
+                    'source_name': getattr(record, 'source_name', 'unknown'),
+                    'protocol': record.protocol_type.value if hasattr(record, 'protocol_type') else 'unknown',
+                    'topic_or_path': getattr(record, 'topic_or_path', ''),
+                    'value': getattr(record, 'value', None),
+                    'quality': getattr(record, 'quality', 'UNKNOWN'),
+                    'metadata': getattr(record, 'metadata', {}) or {},
+                    'vendor_format': vendor_format
+                }
+            self.vendor_pipelines[vendor_format]['raw_protocol'].append(raw_message)
+        except Exception as e:
+            logger.error(f"[DEBUG] EXCEPTION in sample capture: {e}", exc_info=True)
+
         # Convert to dict using the record's to_dict method
         record_dict = record.to_dict()
 
-        # Apply normalization if enabled (skip for now - schema mismatch)
-        # if self.normalization_enabled and self.norm_manager:
-        #     try:
-        #         normalizer = self.norm_manager.get_normalizer(record.protocol_type.value)
-        #         if normalizer:
-        #             # Create raw data format expected by normalizer
-        #             raw_data = self._protocol_record_to_raw_data(record)
-        #             normalized_tag = normalizer.normalize(raw_data)
-        #
-        #             # Update record with normalized values
-        #             record_dict['tag_path'] = normalized_tag.tag_path
-        #             record_dict['tag_id'] = normalized_tag.tag_id
-        #             record_dict['data_type'] = normalized_tag.data_type.value
-        #             record_dict['quality'] = normalized_tag.quality.value
-        #
-        #             self.metrics['records_normalized'] += 1
-        #     except Exception as e:
-        #         logger.warning(f"Normalization failed: {e}")
+        # Add vendor format to record
+        record_dict['vendor_format'] = vendor_format
+
+        # Stage 2: Capture after vendor detection (per-vendor)
+        after_vendor = record_dict.copy()
+        after_vendor['timestamp'] = time.time()
+        after_vendor['stage'] = 'after_vendor_detection'
+        self.vendor_pipelines[vendor_format]['after_vendor_detection'].append(after_vendor)
+
+        # Stage 3: Apply normalization if enabled
+        after_norm = record_dict.copy()
+        after_norm['timestamp'] = time.time()
+        after_norm['stage'] = 'after_normalization'
+
+        if self.normalization_enabled and self.norm_manager:
+            try:
+                normalizer = self.norm_manager.get_normalizer(record.protocol_type.value)
+                if normalizer:
+                    # Create raw data format expected by normalizer
+                    raw_data = self._protocol_record_to_raw_data(record)
+                    normalized_tag = normalizer.normalize(raw_data)
+
+                    # Update record with normalized values
+                    record_dict['tag_path'] = normalized_tag.tag_path
+                    record_dict['tag_id'] = normalized_tag.tag_id
+                    record_dict['data_type'] = normalized_tag.data_type.value
+                    record_dict['quality'] = normalized_tag.quality.value
+
+                    # Update after_norm sample with normalized values
+                    after_norm.update({
+                        'tag_path': normalized_tag.tag_path,
+                        'tag_id': normalized_tag.tag_id,
+                        'data_type': normalized_tag.data_type.value,
+                        'quality': normalized_tag.quality.value,
+                        'normalized': True
+                    })
+
+                    self.metrics['records_normalized'] += 1
+                else:
+                    after_norm['normalized'] = False
+                    after_norm['normalized_reason'] = 'No normalizer for protocol'
+            except Exception as e:
+                logger.warning(f"Normalization failed: {e}")
+                after_norm['normalized'] = False
+                after_norm['normalized_error'] = str(e)
+        else:
+            after_norm['normalized'] = False
+            after_norm['normalized_reason'] = 'Normalization disabled'
+
+        # Capture normalization stage
+        self.vendor_pipelines[vendor_format]['after_normalization'].append(after_norm)
 
         # Enqueue for ZeroBus
         # Fast-path: avoid creating a task per record (can starve the event loop).
@@ -454,10 +646,10 @@ class UnifiedBridge:
         """
         return {
             'value': record.value,
-            'timestamp': record.timestamp,
-            'quality': record.quality,
-            'tag_name': record.tag_name,
-            'tag_id': record.tag_id,
+            'timestamp': record.event_time_ms / 1000.0,  # Convert ms to seconds
+            'quality': record.status,  # ProtocolRecord has 'status', not 'quality'
+            'tag_name': record.topic_or_path,  # Use topic_or_path as tag_name
+            'tag_id': record.topic_or_path,  # Use topic_or_path as tag_id
             'source_name': record.source_name,
             'metadata': record.metadata or {},
         }
@@ -510,6 +702,14 @@ class UnifiedBridge:
                         # Convert to ZeroBus message format
                         message = self._to_zerobus_message(record)
                         batch.append(message)
+
+                        # Capture ZeroBus batch stage sample (per-vendor)
+                        vendor_format = record.get('vendor_format', 'unknown')
+                        zerobus_sample = message.copy()
+                        zerobus_sample['timestamp'] = time.time()
+                        zerobus_sample['stage'] = 'zerobus_batch'
+                        if vendor_format in self.vendor_pipelines:
+                            self.vendor_pipelines[vendor_format]['zerobus_batch'].append(zerobus_sample)
 
                     else:
                         # Nothing to send; avoid a hot loop that starves the web UI
@@ -580,6 +780,36 @@ class UnifiedBridge:
 
         browse_path = record.get('topic_or_path') or metadata.get('tag_name') or metadata.get('browse_path') or ''
 
+        # Detect vendor format from browse_path/topic
+        vendor_format = record.get('vendor_format', '')
+        if not vendor_format:
+            # Detect from browse_path if not already set
+            topic_lower = str(browse_path).lower()
+            protocol_type = record.get('protocol_type', '') or record.get('protocol', '')
+
+            # Check for vendor-specific patterns in browse_path FIRST
+            if "sparkplugb" in topic_lower or "sparkplug" in topic_lower:
+                vendor_format = "sparkplug_b"
+            elif "siemens_s7" in topic_lower or "allen_bradley" in topic_lower or "modicon" in topic_lower or "kepware" in topic_lower:
+                vendor_format = "kepware"
+            elif topic_lower.startswith("honeywell/") or "experion" in topic_lower or "pks" in topic_lower:
+                vendor_format = "honeywell"
+            elif "channel" in topic_lower and "device" in topic_lower:
+                # Kepware pattern: Channel1.Device1.Tag
+                vendor_format = "kepware"
+            # Then check protocol type as fallback
+            elif 'modbus' in str(protocol_type).lower():
+                vendor_format = "modbus"
+            elif 'mqtt' in str(protocol_type).lower() and "/" in str(browse_path):
+                vendor_format = "mqtt_generic"
+            elif 'opcua' in str(protocol_type).lower():
+                # Native OPC UA (no vendor wrapper)
+                vendor_format = "opcua_native"
+            elif "/" in str(browse_path):
+                vendor_format = "generic"
+            else:
+                vendor_format = "unknown"
+
         msg: Dict[str, Any] = {
             'event_time': event_time,
             'ingest_time': ingest_time,
@@ -598,6 +828,7 @@ class UnifiedBridge:
             'plc_name': str(metadata.get('plc_name') or ''),
             'plc_vendor': str(metadata.get('plc_vendor') or ''),
             'plc_model': str(metadata.get('plc_model') or ''),
+            'vendor_format': str(vendor_format),  # Vendor format (kepware, honeywell, sparkplug_b, etc.)
         }
 
         if msg.get('value_num') is None:
@@ -662,6 +893,57 @@ class UnifiedBridge:
                 }
                 for name, client in self.clients.items()
             }
+        }
+
+    def get_pipeline_diagnostics(self) -> Dict[str, Any]:
+        """Get message transformation pipeline diagnostics per vendor format.
+
+        Returns:
+            Pipeline diagnostics with per-vendor pipeline stages
+        """
+        vendor_pipelines_data = {}
+
+        for vendor_name, pipeline in self.vendor_pipelines.items():
+            vendor_pipelines_data[vendor_name] = {
+                'vendor_name': vendor_name,
+                'record_count': pipeline['record_count'],
+                'pipeline_stages': [
+                    {
+                        'stage': 'raw_protocol',
+                        'name': 'Raw Protocol',
+                        'description': 'Messages as received from OPC UA/MQTT/Modbus',
+                        'sample_count': len(pipeline['raw_protocol']),
+                        'samples': list(pipeline['raw_protocol'])
+                    },
+                    {
+                        'stage': 'after_vendor_detection',
+                        'name': 'Vendor Detection',
+                        'description': f'After detecting {vendor_name} format',
+                        'sample_count': len(pipeline['after_vendor_detection']),
+                        'samples': list(pipeline['after_vendor_detection'])
+                    },
+                    {
+                        'stage': 'after_normalization',
+                        'name': 'ISA-95 Normalization',
+                        'description': 'After applying ISA-95 tag standardization',
+                        'sample_count': len(pipeline['after_normalization']),
+                        'samples': list(pipeline['after_normalization'])
+                    },
+                    {
+                        'stage': 'zerobus_batch',
+                        'name': 'ZeroBus Batch',
+                        'description': 'Final format sent to Databricks Delta table',
+                        'sample_count': len(pipeline['zerobus_batch']),
+                        'samples': list(pipeline['zerobus_batch'])
+                    }
+                ]
+            }
+
+        return {
+            'vendor_pipelines': vendor_pipelines_data,
+            'vendor_format_summary': self.metrics['vendor_formats'],
+            'total_records_received': self.metrics['records_received'],
+            'normalization_enabled': self.normalization_enabled
         }
 
     async def add_source(self, source_name: str, source_type: str, source_config: Dict[str, Any]):

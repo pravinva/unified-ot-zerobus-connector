@@ -68,8 +68,13 @@ class OPCUASimulator:
         self._running = False
         self._server_task = None
         self._initialized = False  # Track if init() completed successfully
+        self._capture_counter = 0  # For sampling message capture
         self.simulator_manager = simulator_manager  # Reference to SimulatorManager for PLC access
         self.vendor_integration: VendorModeIntegration | None = None
+
+        # Track connected clients
+        self.connected_clients: dict[str, dict[str, Any]] = {}  # session_id -> client info
+        self._last_client_check = 0
 
         # Initialize security manager
         self.security_manager = OPCUASecurityManager(self.security_config)
@@ -127,9 +132,16 @@ class OPCUASimulator:
             # Initialize vendor mode integration if available
             if VENDOR_MODES_AVAILABLE and self.simulator_manager:
                 try:
-                    self.vendor_integration = VendorModeIntegration(self.simulator_manager)
-                    await self.vendor_integration.initialize()
-                    logger.info("✓ Vendor mode integration initialized for OPC UA")
+                    # Reuse existing vendor_integration from simulator_manager if available
+                    if hasattr(self.simulator_manager, 'vendor_integration') and self.simulator_manager.vendor_integration:
+                        self.vendor_integration = self.simulator_manager.vendor_integration
+                        logger.info("✓ Using shared vendor mode integration for OPC UA")
+                    else:
+                        # Create new instance and store on simulator_manager for others to reuse
+                        self.vendor_integration = VendorModeIntegration(self.simulator_manager)
+                        await self.vendor_integration.initialize()
+                        self.simulator_manager.vendor_integration = self.vendor_integration  # Share with other simulators
+                        logger.info("✓ Vendor mode integration initialized for OPC UA (shared instance created)")
                 except Exception as e:
                     logger.warning(f"Failed to initialize vendor modes: {e}")
                     self.vendor_integration = None
@@ -337,16 +349,8 @@ class OPCUASimulator:
             mode_root = await root.add_object(idx, mode_name)
             logger.info(f"  Creating {mode_name} node structure...")
 
-            # Register all sensors with the mode first
-            for sensor_path, simulator in self.simulators.items():
-                # Get PLC if available using the correct method
-                plc = None
-                if self.simulator_manager and hasattr(self.simulator_manager, 'plc_manager'):
-                    plc_mgr = self.simulator_manager.plc_manager
-                    if plc_mgr and hasattr(plc_mgr, 'get_plc_for_sensor'):
-                        plc = plc_mgr.get_plc_for_sensor(sensor_path)
-
-                mode.register_sensor(sensor_path, plc_instance=plc)
+            # Note: Sensors are already registered with modes during vendor_integration.initialize()
+            # in the integration layer, so we don't need to re-register them here
 
             # Create vendor-specific node structure
             if mode_type == VendorModeType.KEPWARE:
@@ -365,23 +369,30 @@ class OPCUASimulator:
         # Get channels from mode
         channels = getattr(mode, 'channels', {})
 
-        for channel_name, channel_info in channels.items():
+        for channel_name, channel_obj in channels.items():
             channel_node = await parent.add_object(idx, channel_name)
 
-            # Get devices in this channel
-            devices = channel_info.get('devices', {})
-            for device_name, device_info in devices.items():
+            # Get devices in this channel (channel_obj is KepwareChannel dataclass)
+            devices = getattr(channel_obj, 'devices', [])
+            for device_obj in devices:
+                device_name = device_obj.name
                 device_node = await channel_node.add_object(idx, device_name)
 
-                # Get sensors for this device
-                sensors = device_info.get('sensors', [])
-                for sensor_path in sensors:
-                    if sensor_path in self.simulators:
-                        simulator = self.simulators[sensor_path]
+                # Get sensors for this device (device_obj is KepwareDevice dataclass)
+                sensors = getattr(device_obj, 'sensors', [])
+                for sensor_name in sensors:
+                    # sensor_name is just the sensor name, need to find full path
+                    full_sensor_path = None
+                    for path in self.simulators.keys():
+                        if path.endswith('/' + sensor_name):
+                            full_sensor_path = path
+                            break
+
+                    if full_sensor_path and full_sensor_path in self.simulators:
+                        simulator = self.simulators[full_sensor_path]
 
                         # Get tag name (CamelCase conversion)
-                        tag_name = sensor_path.split('/')[-1]
-                        tag_name = ''.join(word.capitalize() for word in tag_name.split('_'))
+                        tag_name = ''.join(word.capitalize() for word in sensor_name.split('_'))
 
                         # Create tag node
                         tag_node = await device_node.add_variable(
@@ -408,30 +419,32 @@ class OPCUASimulator:
         group_node = await parent.add_object(idx, group_id)
         edge_node = await group_node.add_object(idx, edge_node_id)
 
-        # Get devices
+        # Get devices (dict of device_id -> SparkplugDevice dataclass)
         devices = getattr(mode, 'devices', {})
-        for device_name, device_info in devices.items():
-            device_node = await edge_node.add_object(idx, device_name)
+        for device_id, device_obj in devices.items():
+            device_node = await edge_node.add_object(idx, device_id)
 
-            sensors = device_info.get('sensors', [])
-            for sensor_path in sensors:
-                if sensor_path in self.simulators:
-                    simulator = self.simulators[sensor_path]
+            # Get metrics from the device dataclass
+            metrics = getattr(device_obj, 'metrics', [])
+            for metric in metrics:
+                metric_name = getattr(metric, 'name', 'unknown')
 
-                    # Get metric name
-                    metric_name = sensor_path.replace('/', '/')
+                # Find simulator for this metric
+                # Metrics are sensor paths in format "industry/sensor_name"
+                if metric_name in self.simulators:
+                    simulator = self.simulators[metric_name]
 
                     # Create metric node
                     metric_node = await device_node.add_variable(
                         idx,
-                        metric_name,
+                        metric_name.replace('/', '_'),
                         simulator.get_value(),
                         varianttype=ua.VariantType.Double,
                     )
                     await metric_node.set_writable()
 
                     # Store with vendor-specific path
-                    vendor_path = f"vendor_sparkplug_{device_name}_{metric_name}"
+                    vendor_path = f"vendor_sparkplug_{device_id}_{metric_name.replace('/', '_')}"
                     self.nodes[vendor_path] = metric_node
 
         logger.info(f"    Created Sparkplug B structure: {len(devices)} devices")
@@ -441,21 +454,31 @@ class OPCUASimulator:
         server_name = getattr(mode, 'server_name', 'EXPERION_PKS')
         server_node = await parent.add_object(idx, server_name)
 
-        # Get modules
+        # Get modules (dict of module_name -> ExperionModule dataclass)
         modules = getattr(mode, 'modules', {})
-        for module_name, module_info in modules.items():
+        for module_name, module_obj in modules.items():
             module_node = await server_node.add_object(idx, module_name)
 
-            points = module_info.get('points', [])
-            for sensor_path in points:
-                if sensor_path in self.simulators:
+            # Get points from the module dataclass (list of CompositePoint objects)
+            points = getattr(module_obj, 'points', [])
+            for point_obj in points:
+                # point_obj is a CompositePoint dataclass
+                sensor_name = getattr(point_obj, 'sensor_name', None)
+                if not sensor_name:
+                    continue
+
+                # Find the full sensor path (e.g., "mining/crusher_1_motor_power")
+                sensor_path = None
+                for path in self.simulators.keys():
+                    if path.endswith('/' + sensor_name):
+                        sensor_path = path
+                        break
+
+                if sensor_path and sensor_path in self.simulators:
                     simulator = self.simulators[sensor_path]
 
-                    # Get abbreviated point name
-                    point_name = sensor_path.split('/')[-1].upper()
-                    # Abbreviate if needed (e.g., CRUSHER -> CRUSH)
-                    if len(point_name) > 12:
-                        point_name = point_name[:12]
+                    # Get the point name from the CompositePoint object
+                    point_name = getattr(point_obj, 'name', sensor_name.upper())
 
                     # Create point folder
                     point_node = await module_node.add_object(idx, point_name)
@@ -550,9 +573,11 @@ class OPCUASimulator:
                     # Update all sensors (with PLC metadata if enabled)
                     for path, simulator in self.simulators.items():
                         # Get value through PLC layer if available
+                        quality_code = None
                         if self.simulator_manager and hasattr(self.simulator_manager, 'get_sensor_value_with_plc'):
                             result = self.simulator_manager.get_sensor_value_with_plc(path)
                             new_value = result.get('value')
+                            quality_code = result.get('quality')
                             # TODO: Update quality code in OPC-UA node (requires StatusCode handling)
                         else:
                             new_value = simulator.update()
@@ -562,6 +587,38 @@ class OPCUASimulator:
                             new_value = float(new_value)
                             node = self.nodes[path]
                             await node.write_value(new_value)
+
+                            # Capture message for live inspector - sample to avoid flooding buffer
+                            if self.vendor_integration and len(self.simulators) > 0:
+                                self._capture_counter += 1
+                                # Sample every 10th update to match MQTT sampling rate
+                                if self._capture_counter % 10 == 0:
+                                    try:
+                                        # Get the node ID for this sensor
+                                        from ot_simulator.vendor_modes.base import VendorModeType
+
+                                        # Capture for ALL vendor modes (like MQTT does)
+                                        for mode_type in [VendorModeType.GENERIC, VendorModeType.KEPWARE, VendorModeType.HONEYWELL, VendorModeType.SPARKPLUG_B]:
+                                            node_id = self.vendor_integration.get_opcua_node_id(path, mode_type)
+                                            if node_id:
+                                                # Create OPC UA style payload
+                                                payload = {
+                                                    "node_id": node_id,
+                                                    "value": new_value,
+                                                    "timestamp": simulator.last_update,
+                                                    "quality": quality_code.name if quality_code else "GOOD",
+                                                    "sensor_path": path
+                                                }
+
+                                                self.vendor_integration.capture_message(
+                                                    mode_type=mode_type,
+                                                    topic=node_id,
+                                                    payload=payload,
+                                                    protocol="opcua"
+                                                )
+                                    except Exception as e:
+                                        # Don't let capture errors break the update loop
+                                        logger.warning(f"Failed to capture OPC UA message for {path}: {e}")
 
                     # Update PLC diagnostic nodes if in PLC mode
                     if self.simulator_manager and hasattr(self.simulator_manager, 'plc_manager'):
@@ -653,6 +710,65 @@ class OPCUASimulator:
         # Restart server
         self._server_task = asyncio.create_task(self._run_server_loop())
         logger.info("✓ OPC-UA server reinitialized with PLC-based nodes")
+
+    def get_connected_clients(self) -> list[dict[str, Any]]:
+        """Get list of connected OPC UA clients.
+
+        Returns:
+            List of client info dictionaries with:
+            - client_id: Client identifier
+            - endpoint: Client endpoint/address
+            - connect_time: Connection timestamp
+            - subscriptions: Number of active subscriptions
+        """
+        import time
+
+        clients = []
+
+        if not self.server or not self._running:
+            return clients
+
+        try:
+            # Try to access internal server to get session information
+            if hasattr(self.server, 'iserver') and self.server.iserver:
+                iserver = self.server.iserver
+
+                # Get active sessions from internal server
+                if hasattr(iserver, 'subscription_service') and hasattr(iserver.subscription_service, 'subscriptions'):
+                    # Track sessions via subscriptions
+                    session_subs = {}
+                    for sub_id, subscription in iserver.subscription_service.subscriptions.items():
+                        if hasattr(subscription, 'session'):
+                            session = subscription.session
+                            session_id = id(session)
+                            if session_id not in session_subs:
+                                session_subs[session_id] = {
+                                    'session': session,
+                                    'subscriptions': []
+                                }
+                            session_subs[session_id]['subscriptions'].append(sub_id)
+
+                    # Build client list from sessions
+                    for session_id, info in session_subs.items():
+                        session = info['session']
+                        client_info = {
+                            'client_id': f"Client-{session_id % 10000}",
+                            'endpoint': getattr(session, 'name', 'Unknown'),
+                            'connect_time': time.time() - 300,  # Approximate (5 min ago for active sessions)
+                            'subscriptions': len(info['subscriptions']),
+                            'session_id': str(session_id)
+                        }
+                        clients.append(client_info)
+
+            # If no sessions found via subscriptions, check if server is accepting connections
+            if not clients and self._running:
+                # Server is running but no clients connected
+                pass
+
+        except Exception as e:
+            logger.debug(f"Could not get client info from internal server: {e}")
+
+        return clients
 
     async def stop(self):
         """Stop the OPC-UA server."""

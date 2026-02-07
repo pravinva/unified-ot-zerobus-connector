@@ -40,8 +40,8 @@ class ProtocolRecord:
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
-            "event_time": int(self.event_time_ms) * 1000,  # Convert to microseconds for UC TIMESTAMP
-            "ingest_time": int(time.time() * 1_000_000),
+            "event_time": int(self.event_time_ms) * 1000,  # Convert ms to microseconds for UC TIMESTAMP
+            "ingest_time": int(time.time() * 1_000_000),  # Microseconds for UC TIMESTAMP
             "source_name": self.source_name,
             "endpoint": self.endpoint,
             "protocol_type": self.protocol_type.value,

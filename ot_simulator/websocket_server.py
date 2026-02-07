@@ -734,6 +734,25 @@ class WebSocketServer:
                     "errors": 0,
                 }
 
+        # Add vendor mode metrics if available
+        try:
+            mqtt_sim = self.manager.simulators.get("mqtt")
+            if mqtt_sim and hasattr(mqtt_sim, "vendor_integration") and mqtt_sim.vendor_integration:
+                from ot_simulator.vendor_modes.base import VendorModeType
+                vendor_modes = {}
+                for mode_type in VendorModeType:
+                    try:
+                        mode_status = mqtt_sim.vendor_integration.get_mode_status(mode_type)
+                        vendor_modes[mode_type.value] = {
+                            "enabled": mode_status.get("enabled", False),
+                            "metrics": mode_status.get("metrics", {})
+                        }
+                    except Exception:
+                        pass
+                status["vendor_modes"] = vendor_modes
+        except Exception as e:
+            logger.debug(f"Could not add vendor mode metrics to WebSocket broadcast: {e}")
+
         for ws in list(self.connections):
             try:
                 await ws.send_json(status)

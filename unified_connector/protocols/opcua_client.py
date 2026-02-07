@@ -69,6 +69,7 @@ class OPCUAClient(ProtocolClient):
         self._monitored_items: list[Any] = []
         self._variables: list[Node] = []  # Store discovered variables for polling
         self._poll_targets: list[tuple[Node, str, str]] = []  # (node, node_id, tag_name)
+        self._node_paths: dict[str, str] = {}  # Mapping from node_id to full browse path
         self._namespaces: list[str] = []
 
         # Normalization support
@@ -282,13 +283,16 @@ class OPCUAClient(ProtocolClient):
         self._poll_targets = []
         for var_node in self._variables:
             node_id = str(var_node.nodeid)
-            tag_name = node_id
+            # Use the full browse path if available, otherwise fallback to tag name
+            browse_path = self._node_paths.get(node_id, node_id)
             try:
-                browse_name = await var_node.read_browse_name()
-                tag_name = getattr(browse_name, 'Name', node_id)
+                if node_id not in self._node_paths:
+                    # Fallback: read browse name if path wasn't stored during discovery
+                    browse_name = await var_node.read_browse_name()
+                    browse_path = getattr(browse_name, 'Name', node_id)
             except Exception:
                 pass
-            self._poll_targets.append((var_node, node_id, tag_name))
+            self._poll_targets.append((var_node, node_id, browse_path))
 
         if self.polling_mode:
             # POLLING MODE: Actively read all values at regular intervals
@@ -320,16 +324,16 @@ class OPCUAClient(ProtocolClient):
                 batch = targets[i:i+batch_size]
 
                 async def _read_one(t):
-                    node, node_id, tag_name = t
+                    node, node_id, browse_path = t
                     try:
                         v = await node.read_value()
-                        return (node_id, tag_name, v, None)
+                        return (node_id, browse_path, v, None)
                     except Exception as e:
-                        return (node_id, tag_name, None, e)
+                        return (node_id, browse_path, None, e)
 
                 results = await asyncio.gather(*(_read_one(t) for t in batch))
 
-                for node_id, tag_name, data_value, err in results:
+                for node_id, browse_path, data_value, err in results:
                     if err is not None:
                         # keep log noise low
                         continue
@@ -339,12 +343,12 @@ class OPCUAClient(ProtocolClient):
                         source_name=self.source_name,
                         endpoint=self.endpoint,
                         protocol_type=self.protocol_type,
-                        topic_or_path=tag_name,
+                        topic_or_path=browse_path,
                         value=data_value,
                         value_type=type(data_value).__name__,
                         value_num=float(data_value) if isinstance(data_value, (int, float)) else None,
                         status="Good",
-                        metadata={"node_id": node_id, "tag_name": tag_name},
+                        metadata={"node_id": node_id, "browse_path": browse_path},
                     )
                     self.on_record(record)
                     records_sent += 1
@@ -455,6 +459,8 @@ class OPCUAClient(ProtocolClient):
                         node_class = await child.read_node_class()
                         if node_class.value == 2:  # Variable NodeClass
                             variables.append(child)
+                            # Store the full browse path for this node
+                            self._node_paths[str(child.nodeid)] = child_path
                             logger.debug(f"   ✓ Found variable #{len(variables)}: {child_path}")
                         else:
                             # Log other node types

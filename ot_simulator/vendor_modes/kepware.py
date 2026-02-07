@@ -382,16 +382,45 @@ class KepwareMode(VendorMode):
         return f"{prefix}/{channel}/{device}/{tag}"
 
     def get_diagnostics(self) -> Dict[str, Any]:
-        """Get Kepware-specific diagnostics."""
+        """Get Kepware-specific diagnostics with device breakdown."""
         channel_stats = []
         for channel in self.channels.values():
+            # Build device list for this channel
+            devices_list = []
+            for device in channel.devices:
+                # Infer equipment type from device name
+                equipment_type = "Generic Device"
+                name_lower = device.name.lower()
+                if "crusher" in name_lower:
+                    equipment_type = "Primary Crusher" if "01" in device.name else "Secondary Crusher"
+                elif "conveyor" in name_lower:
+                    equipment_type = "Belt Conveyor"
+                elif "pump" in name_lower:
+                    equipment_type = "Pump"
+                elif "motor" in name_lower:
+                    equipment_type = "Motor"
+                elif "turbine" in name_lower:
+                    equipment_type = "Turbine"
+                elif "compressor" in name_lower:
+                    equipment_type = "Compressor"
+                elif "reactor" in name_lower:
+                    equipment_type = "Reactor"
+
+                devices_list.append({
+                    "name": device.name,
+                    "equipment_type": equipment_type,
+                    "tag_count": len(device.tags),
+                    "status": "🟢 Active"  # All devices active in simulator
+                })
+
             channel_stats.append({
                 "name": channel.name,
                 "driver_type": channel.driver_type,
-                "plc_vendor": channel.plc_vendor,
+                "plc_vendor": channel.plc_vendor.value if hasattr(channel.plc_vendor, 'value') else str(channel.plc_vendor),
                 "plc_model": channel.plc_model,
                 "device_count": len(channel.devices),
                 "tag_count": sum(len(d.tags) for d in channel.devices),
+                "devices": devices_list  # Add device breakdown
             })
 
         return {

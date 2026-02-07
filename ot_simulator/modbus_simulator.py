@@ -47,7 +47,11 @@ logger = logging.getLogger("ot_simulator.modbus")
 class ModbusSimulator:
     """Modbus TCP/RTU server simulator with realistic sensor data."""
 
-    def __init__(self, config: ModbusConfig):
+    def __init__(self, config: ModbusConfig, simulator_manager=None):
+        self.simulator_manager = simulator_manager
+        self.vendor_integration = None
+        self._capture_counter = 0  # For sampling message capture
+
         # Try to import again if initial import failed
         if not PYMODBUS_AVAILABLE:
             try:
@@ -135,6 +139,15 @@ class ModbusSimulator:
             current_address = base_address + len(sensors)
 
         self.simulators = register_map
+
+        # Vendor integration will be set later by another simulator (MQTT or OPC UA)
+        # We'll check for it in the update loop
+        if self.simulator_manager and hasattr(self.simulator_manager, 'vendor_integration'):
+            if self.simulator_manager.vendor_integration:
+                self.vendor_integration = self.simulator_manager.vendor_integration
+                logger.info("✓ Using shared vendor mode integration for Modbus")
+            else:
+                logger.debug("Vendor integration not yet initialized, will check later")
 
         # Create Modbus datastore
         # We need enough registers to cover all addresses
@@ -255,6 +268,12 @@ class ModbusSimulator:
 
         logger.info(f"Starting register update loop at {self.config.update_rate_hz} Hz")
 
+        # Check for vendor integration at startup
+        if self.simulator_manager and hasattr(self.simulator_manager, 'vendor_integration'):
+            if self.simulator_manager.vendor_integration and not self.vendor_integration:
+                self.vendor_integration = self.simulator_manager.vendor_integration
+                logger.info("✓ Modbus connected to shared vendor mode integration at startup")
+
         try:
             while self._running:
                 start_time = time.time()
@@ -278,6 +297,41 @@ class ModbusSimulator:
                         slave_context = self.context[slave_id]
                         # Update holding register
                         slave_context.setValues(3, address, [scaled_value])  # 3 = holding registers
+
+                    # Lazy-load vendor_integration if it becomes available (set by MQTT or OPC UA)
+                    if not self.vendor_integration and self.simulator_manager:
+                        if hasattr(self.simulator_manager, 'vendor_integration') and self.simulator_manager.vendor_integration:
+                            self.vendor_integration = self.simulator_manager.vendor_integration
+                            logger.info("✓ Modbus connected to shared vendor mode integration")
+
+                    # Capture message for live inspector - sample to avoid flooding
+                    if self.vendor_integration:
+                        self._capture_counter += 1
+                        # Sample every 10th update to match MQTT/OPC UA sampling rate
+                        if self._capture_counter % 10 == 0:
+                            try:
+                                from ot_simulator.vendor_modes.base import VendorModeType
+
+                                # Capture for generic mode (Modbus doesn't have vendor-specific modes)
+                                payload = {
+                                    "register_address": address,
+                                    "raw_value": scaled_value,
+                                    "actual_value": value,
+                                    "scale_factor": self.config.scale_factor,
+                                    "timestamp": simulator.last_update,
+                                    "sensor_path": path,
+                                    "slave_id": self.config.slave_id
+                                }
+
+                                self.vendor_integration.capture_message(
+                                    mode_type=VendorModeType.GENERIC,
+                                    topic=f"modbus://{self.config.slave_id}/{address}",
+                                    payload=payload,
+                                    protocol="modbus"
+                                )
+                            except Exception as e:
+                                # Don't let capture errors break the update loop
+                                logger.debug(f"Failed to capture Modbus message for {path}: {e}")
 
                 self._update_count += 1
 

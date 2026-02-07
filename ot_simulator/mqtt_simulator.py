@@ -54,6 +54,7 @@ class MQTTSimulator:
         self.client: aiomqtt.Client | None = None
         self._running = False
         self._message_count = 0
+        self._capture_counter = 0  # For sampling message capture
         self.simulator_manager = simulator_manager
         self.vendor_integration: VendorModeIntegration | None = None
 
@@ -80,9 +81,16 @@ class MQTTSimulator:
         # Initialize vendor mode integration if available
         if VENDOR_MODES_AVAILABLE and self.simulator_manager:
             try:
-                self.vendor_integration = VendorModeIntegration(self.simulator_manager)
-                await self.vendor_integration.initialize()
-                logger.info("✓ Vendor mode integration initialized for MQTT")
+                # Reuse existing vendor_integration from simulator_manager if available
+                if hasattr(self.simulator_manager, 'vendor_integration') and self.simulator_manager.vendor_integration:
+                    self.vendor_integration = self.simulator_manager.vendor_integration
+                    logger.info("✓ Using shared vendor mode integration for MQTT")
+                else:
+                    # Create new instance and store on simulator_manager for others to reuse
+                    self.vendor_integration = VendorModeIntegration(self.simulator_manager)
+                    await self.vendor_integration.initialize()
+                    self.simulator_manager.vendor_integration = self.vendor_integration  # Share with other simulators
+                    logger.info("✓ Vendor mode integration initialized for MQTT (shared instance created)")
             except Exception as e:
                 logger.warning(f"Failed to initialize vendor modes: {e}")
                 self.vendor_integration = None
@@ -263,11 +271,12 @@ class MQTTSimulator:
                 if self.simulator_manager and hasattr(self.simulator_manager, 'plc_manager'):
                     plc_mgr = self.simulator_manager.plc_manager
                     if plc_mgr:
-                        # Try to get quality from PLC
-                        for plc in plc_mgr.plcs.values():
-                            if path in plc.sensor_mappings:
-                                quality = plc.quality_code
-                                break
+                        # Get the PLC that controls this sensor
+                        plc_instance = plc_mgr.get_plc_for_sensor(path)
+                        if plc_instance:
+                            # Read value with PLC behavior (quality, scan cycle, etc.)
+                            plc_data = plc_instance.read_input(path)
+                            quality = PLCQualityCode(plc_data.get('quality', 'Good'))
 
                 # Format sensor data for all enabled vendor modes
                 vendor_data = self.vendor_integration.format_sensor_data(
@@ -276,6 +285,12 @@ class MQTTSimulator:
                     quality=quality,
                     timestamp=timestamp
                 )
+
+                # Debug log
+                if not vendor_data:
+                    logger.warning(f"No vendor data returned for {path}")
+                else:
+                    logger.info(f"Vendor data for {path}: {len(vendor_data)} modes")
 
                 # Publish to each vendor mode's topic
                 for mode_type, formatted_data in vendor_data.items():
@@ -291,6 +306,28 @@ class MQTTSimulator:
 
                         await self.client.publish(topic, payload=payload, qos=self.config.qos)
                         self._message_count += 1
+
+                        # Capture message for live inspector (sample every 10th message to avoid flooding)
+                        self._capture_counter += 1
+                        if self._capture_counter % 10 == 0:
+                            logger.info(f"Capturing message: mode={mode_type.value}, topic={topic}")
+                            # Add sensor_path to payload if not already present
+                            payload_with_path = formatted_data.copy() if isinstance(formatted_data, dict) else formatted_data
+                            if isinstance(payload_with_path, dict) and 'sensor_path' not in payload_with_path:
+                                payload_with_path['sensor_path'] = path
+
+                            # Determine message type for Sparkplug B
+                            msg_type = None
+                            if mode_type == VendorModeType.SPARKPLUG_B:
+                                msg_type = "DDATA"  # Regular data messages are DDATA
+
+                            self.vendor_integration.capture_message(
+                                mode_type=mode_type,
+                                topic=topic,
+                                payload=payload_with_path,
+                                protocol="mqtt",
+                                message_type=msg_type
+                            )
 
                 return  # Done with vendor mode publishing
             except Exception as e:
@@ -386,6 +423,18 @@ class MQTTSimulator:
                             await self.client.publish(nbirth_topic, nbirth_payload, qos=1)
                             logger.info(f"Published Sparkplug B NBIRTH to {nbirth_topic}")
 
+                            # Capture NBIRTH message
+                            if self.vendor_integration:
+                                nbirth_with_meta = nbirth.copy()
+                                nbirth_with_meta['message_type'] = 'NBIRTH'
+                                self.vendor_integration.capture_message(
+                                    mode_type=VendorModeType.SPARKPLUG_B,
+                                    topic=nbirth_topic,
+                                    payload=nbirth_with_meta,
+                                    protocol="mqtt",
+                                    message_type="NBIRTH"
+                                )
+
                         # Generate and publish DBIRTH (Device BIRTH) for each device
                         # Register all sensors first
                         for sensor_path in self.simulators.keys():
@@ -408,6 +457,19 @@ class MQTTSimulator:
                             dbirth_payload = json.dumps(dbirth).encode("utf-8")
                             await self.client.publish(dbirth_topic, dbirth_payload, qos=1)
                             logger.info(f"Published Sparkplug B DBIRTH for device {device_name}")
+
+                            # Capture DBIRTH message
+                            if self.vendor_integration:
+                                dbirth_with_meta = dbirth.copy()
+                                dbirth_with_meta['message_type'] = 'DBIRTH'
+                                dbirth_with_meta['device_id'] = device_name
+                                self.vendor_integration.capture_message(
+                                    mode_type=VendorModeType.SPARKPLUG_B,
+                                    topic=dbirth_topic,
+                                    payload=dbirth_with_meta,
+                                    protocol="mqtt",
+                                    message_type="DBIRTH"
+                                )
 
                     except Exception as e:
                         logger.error(f"Error publishing BIRTH messages for {mode_type}: {e}")
@@ -536,6 +598,22 @@ class MQTTSimulator:
     async def stop(self):
         """Stop the MQTT publisher."""
         self._running = False
+
+    def get_connected_subscribers(self) -> list[dict[str, Any]]:
+        """Get list of MQTT subscribers (if broker provides this info).
+
+        Note: This simulator is an MQTT publisher/client, not a broker.
+        Tracking subscribers requires broker-side APIs which are not
+        available through the standard MQTT client protocol.
+
+        Returns:
+            Empty list (subscriber tracking not available from client side)
+        """
+        # MQTT protocol doesn't provide subscriber information to publishers
+        # This would require direct access to broker internals or broker-specific APIs
+        # For example: Mosquitto has $SYS topics, HiveMQ has REST API, etc.
+
+        return []
 
     def inject_fault(self, sensor_path: str, duration: float = 10.0):
         """Inject a fault into a specific sensor."""

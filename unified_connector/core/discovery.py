@@ -190,15 +190,22 @@ class DiscoveryService:
         """
         discovered = []
         default_port = self.opcua_config.get("default_port", 4840)
+        vendor_ports = self.opcua_config.get("vendor_ports", [])
         timeout = self.opcua_config.get("timeout_sec", 5.0)
 
-        logger.info(f"Discovering OPC-UA servers on port {default_port}...")
+        # Scan both default and vendor-specific ports
+        ports = [default_port] + vendor_ports
+        logger.info(f"Discovering OPC-UA servers on ports {ports}...")
 
         # Scan IPs in batches to avoid overwhelming the network
         batch_size = 20
         for i in range(0, len(ips), batch_size):
             batch = ips[i:i+batch_size]
-            tasks = [self._test_opcua_endpoint(ip, default_port, timeout) for ip in batch]
+            tasks = []
+            for ip in batch:
+                for port in ports:
+                    tasks.append(self._test_opcua_endpoint(ip, port, timeout))
+
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
             for result in results:

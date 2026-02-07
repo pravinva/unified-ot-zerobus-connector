@@ -109,6 +109,62 @@ opcua:
 - Sensors: `ns=2;s=Industries/{industry}/{sensor_name}`
 - Metadata: `Unit`, `Type`, `Min`, `Max` properties
 
+**Vendor Mode Structures:**
+
+The simulator also creates vendor-specific OPC UA node hierarchies that match real-world industrial systems. These are created under `Objects/VendorModes/{vendor_name}/`:
+
+1. **Kepware KEPServerEX** - `Channel.Device.Tag` structure
+   - Path: `VendorModes/Kepware/Siemens_S7_Crushing/Crusher_01/CrusherMotorPower`
+   - Format: `Channel/Device/Tag` (3 levels)
+   - Tag names in CamelCase (e.g., `crusher_motor_power` → `CrusherMotorPower`)
+
+2. **Honeywell Experion PKS** - `Server.Module.Point` with composite attributes
+   - Path: `VendorModes/Honeywell/MINE_A_EXPERION_PKS/FIM_01/CRUSHER_01_POWER/PV`
+   - Format: `Server/Module/Point/Attribute` (4 levels)
+   - Composite attributes per point:
+     - `PV` - Process Value (actual sensor data)
+     - `PVEUHI` - Engineering Units High (max value)
+     - `PVEULO` - Engineering Units Low (min value)
+     - `PVUNITS` - Engineering Units (unit string)
+     - `PVBAD` - Bad Quality Flag (boolean)
+
+3. **Sparkplug B** - `GroupId/EdgeNodeId/DeviceId/Metric` structure
+   - Path: `VendorModes/Sparkplug B/DatabricksDemo/OTSimulator01/MiningAssets/mining_crusher_1_motor_power`
+   - Format: `Group/EdgeNode/Device/Metric` (4 levels)
+   - Primarily MQTT-based, OPC UA nodes for reference only
+
+4. **Generic** - Simple flat structure
+   - Path: `VendorModes/Generic/mining/crusher_motor_power`
+   - Format: `Industry/Sensor` (2 levels)
+   - Original sensor names preserved (snake_case)
+
+**Vendor Mode Configuration:**
+
+Configure vendor modes in `vendor_modes/config.yaml`:
+
+```yaml
+vendor_modes:
+  kepware:
+    enabled: true
+    opcua_enabled: true
+    opcua_port: 49320
+
+  honeywell:
+    enabled: true
+    opcua_enabled: true
+    opcua_port: 4897
+
+  sparkplug_b:
+    enabled: true
+    opcua_enabled: false  # Primarily MQTT
+
+  generic:
+    enabled: true
+    opcua_enabled: true
+```
+
+Each enabled vendor mode automatically creates appropriate node structures for all registered sensors. This allows testing vendor-specific data formats and normalization logic.
+
 #### MQTT Publisher
 
 ```yaml

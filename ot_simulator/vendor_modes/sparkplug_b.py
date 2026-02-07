@@ -477,19 +477,60 @@ class SparkplugBMode(VendorMode):
         else:
             raise ValueError(f"Unsupported message type: {message_type}")
 
+    def get_nbirth_topic(self) -> str:
+        """Get NBIRTH topic."""
+        return f"spBv1.0/{self.group_id}/NBIRTH/{self.edge_node_id}"
+
+    def get_dbirth_topic(self, device_id: str) -> str:
+        """Get DBIRTH topic for a specific device."""
+        return f"spBv1.0/{self.group_id}/DBIRTH/{self.edge_node_id}/{device_id}"
+
+    def get_device_dbirths(self) -> Dict[str, Dict[str, Any]]:
+        """Generate DBIRTH messages for all devices."""
+        dbirths = {}
+        for device_id in self.devices.keys():
+            try:
+                dbirth = self.generate_dbirth(device_id)
+                dbirths[device_id] = dbirth
+            except Exception as e:
+                logger.error(f"Failed to generate DBIRTH for {device_id}: {e}")
+        return dbirths
+
     def get_diagnostics(self) -> Dict[str, Any]:
         """Get Sparkplug B diagnostics."""
+        import datetime
+
+        # Format birth time
+        birth_time_str = None
+        birth_time_ago = None
+        if self.edge_node_birth_time:
+            birth_dt = datetime.datetime.fromtimestamp(self.edge_node_birth_time)
+            birth_time_str = birth_dt.strftime("%Y-%m-%d %H:%M:%S")
+            seconds_ago = time.time() - self.edge_node_birth_time
+            if seconds_ago < 60:
+                birth_time_ago = f"{int(seconds_ago)}s ago"
+            elif seconds_ago < 3600:
+                birth_time_ago = f"{int(seconds_ago / 60)}m ago"
+            else:
+                hours = int(seconds_ago / 3600)
+                minutes = int((seconds_ago % 3600) / 60)
+                birth_time_ago = f"{hours}h {minutes}m ago"
+
         return {
             "group_id": self.group_id,
             "edge_node_id": self.edge_node_id,
             "bd_seq": self.bd_seq,
             "msg_seq": self.msg_seq,
             "edge_node_online": self.edge_node_online,
+            "edge_node_state": "🟢 OPERATIONAL" if self.edge_node_online else "🔴 OFFLINE",
             "edge_node_birth_time": self.edge_node_birth_time,
+            "edge_node_birth_time_formatted": birth_time_str,
+            "edge_node_birth_time_ago": birth_time_ago,
             "devices": [
                 {
                     "device_id": device_id,
                     "is_online": device.is_online,
+                    "state": "🟢 Online" if device.is_online else "🔴 Offline",
                     "metric_count": len(device.metrics),
                     "last_birth_seq": device.last_birth_seq,
                 }

@@ -79,7 +79,7 @@ vendor_modes:
 
   # Honeywell Experion PKS mode - Composite points
   honeywell:
-    enabled: false  # Disabled by default (enable when needed)
+    enabled: true  # Enabled for vendor format testing
     opcua_enabled: true
     opcua_port: 4897  # Separate OPC UA server for Experion
     mqtt_enabled: true

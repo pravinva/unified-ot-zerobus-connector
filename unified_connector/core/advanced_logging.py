@@ -318,7 +318,7 @@ class AdvancedLoggingManager:
             config: Log rotation configuration
         """
         self.config = config
-        self.log_dir = Path('logs')
+        self.log_dir = Path('/tmp/unified_connector_logs')
         self.log_dir.mkdir(parents=True, exist_ok=True)
 
         # Ensure archive directory exists

@@ -81,14 +81,42 @@ class EnhancedWebUI:
 
     async def initialize(self):
         """Initialize async components (like vendor integration)."""
-        if self.vendor_integration and not hasattr(self.vendor_integration, '_initialized'):
+        import logging
+        logger = logging.getLogger("ot_simulator.web_ui")
+
+        # Re-check for existing vendor_integration from protocol simulators
+        # (they may have been initialized after web UI was created)
+        # Prefer MQTT > OPC-UA since MQTT is where messages are captured
+        if not self.vendor_integration and VENDOR_MODES_AVAILABLE and self.manager:
+            for protocol in ['mqtt', 'opcua']:  # Check MQTT first!
+                sim = self.manager.simulators.get(protocol)
+                if sim and hasattr(sim, 'vendor_integration') and sim.vendor_integration:
+                    logger.info(f"Found existing vendor_integration from {protocol} simulator")
+                    self.vendor_integration = sim.vendor_integration
+                    # Update vendor_mode_api to use this instance
+                    if self.vendor_mode_api:
+                        self.vendor_mode_api.vendor_integration = sim.vendor_integration
+                    else:
+                        self.vendor_mode_api = VendorModeAPIRoutes(sim.vendor_integration)
+                        # Re-setup routes with the correct vendor integration
+                        if self.vendor_mode_api:
+                            self.vendor_mode_api.setup_routes(self.app)
+                    break
+
+        # DO NOT re-initialize if it already has been initialized
+        # (checking for _initialized OR if mode_manager exists)
+        if self.vendor_integration:
+            if hasattr(self.vendor_integration, '_initialized') or hasattr(self.vendor_integration, 'mode_manager'):
+                logger.info("Vendor integration already initialized, skipping re-initialization")
+                return
+
+            # Only initialize if brand new
             try:
                 await self.vendor_integration.initialize()
                 # Mark as initialized to avoid re-init
                 self.vendor_integration._initialized = True
             except Exception as e:
-                import logging
-                logging.getLogger("ot_simulator.web_ui").error(f"Failed to initialize vendor integration: {e}")
+                logger.error(f"Failed to initialize vendor integration: {e}")
 
     def _setup_routes(self):
         """Setup HTTP routes."""
@@ -111,6 +139,10 @@ class EnhancedWebUI:
         self.app.router.add_post("/api/zerobus/start", self.api_handlers.handle_zerobus_start)
         self.app.router.add_post("/api/zerobus/stop", self.api_handlers.handle_zerobus_stop)
         self.app.router.add_get("/api/zerobus/status", self.api_handlers.handle_zerobus_status)
+
+        # Protocol clients/subscribers endpoints
+        self.app.router.add_get("/api/protocols/opcua/clients", self.api_handlers.handle_get_opcua_clients)
+        self.app.router.add_get("/api/protocols/mqtt/subscribers", self.api_handlers.handle_get_mqtt_subscribers)
 
         # Training API endpoints
         self.training_api.register_routes(self.app)

@@ -13,7 +13,7 @@ import yaml
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from ot_simulator.plc_models import PLCSimulator, PLCQualityCode
+from ot_simulator.plc_models import PLCSimulator, PLCQualityCode, PLCConfig, PLCVendor
 from ot_simulator.sensor_models import SensorSimulator
 from ot_simulator.vendor_modes.base import ModeConfig, VendorModeType
 from ot_simulator.vendor_modes.factory import VendorModeFactory, VendorModeManager
@@ -37,6 +37,13 @@ class VendorModeIntegration:
 
         # Track which sensors have been registered with which modes
         self.sensor_registrations: Dict[str, List[VendorModeType]] = {}
+
+        # Message buffer for live inspector (circular buffer)
+        from collections import deque
+        self.message_buffer = deque(maxlen=2000)  # Keep last 2000 messages (large buffer for all protocols)
+
+        # Track active MQTT topics being published
+        self.active_topics: Dict[str, Dict[str, Any]] = {}  # topic -> {mode, last_publish_time, message_count}
 
     async def initialize(self):
         """Initialize vendor modes from configuration."""
@@ -220,7 +227,7 @@ class VendorModeIntegration:
         # Get PLC instance
         plc_instance = None
         if self.simulator_manager.plc_manager:
-            plc_instance = self.simulator_manager.plc_manager.get_plc_for_industry(industry)
+            plc_instance = self.simulator_manager.plc_manager.get_plc_for_sensor(sensor_path)
 
         if not plc_instance:
             logger.debug(f"No PLC instance for {sensor_path}, using generic mode only")
@@ -232,7 +239,7 @@ class VendorModeIntegration:
                 model="Generic",
                 name="GENERIC_PLC",
             )
-            plc_instance = PLCInstance(plc_config)
+            plc_instance = PLCSimulator(plc_config, self.simulator_manager)
 
         # Format for each enabled mode
         formatted_data = {}
@@ -285,17 +292,16 @@ class VendorModeIntegration:
         # Get PLC instance
         plc_instance = None
         if self.simulator_manager.plc_manager:
-            plc_instance = self.simulator_manager.plc_manager.get_plc_for_industry(industry)
+            plc_instance = self.simulator_manager.plc_manager.get_plc_for_sensor(sensor_path)
 
         if not plc_instance:
             # Create dummy PLC for generic mode
-            from ot_simulator.plc_models import PLCConfig, PLCVendor
             plc_config = PLCConfig(
                 vendor=PLCVendor.SIEMENS,
                 model="Generic",
                 name="GENERIC_PLC",
             )
-            plc_instance = PLCInstance(plc_config)
+            plc_instance = PLCSimulator(plc_config, self.simulator_manager)
 
         metadata = {"industry": industry}
 
@@ -329,17 +335,16 @@ class VendorModeIntegration:
         # Get PLC instance
         plc_instance = None
         if self.simulator_manager.plc_manager:
-            plc_instance = self.simulator_manager.plc_manager.get_plc_for_industry(industry)
+            plc_instance = self.simulator_manager.plc_manager.get_plc_for_sensor(sensor_path)
 
         if not plc_instance:
             # Create dummy PLC for generic mode
-            from ot_simulator.plc_models import PLCConfig, PLCVendor
             plc_config = PLCConfig(
                 vendor=PLCVendor.SIEMENS,
                 model="Generic",
                 name="GENERIC_PLC",
             )
-            plc_instance = PLCInstance(plc_config)
+            plc_instance = PLCSimulator(plc_config, self.simulator_manager)
 
         metadata = {"industry": industry}
 
@@ -399,3 +404,112 @@ class VendorModeIntegration:
     async def disable_mode(self, mode_type: VendorModeType) -> bool:
         """Disable a vendor mode dynamically."""
         return await self.mode_manager.disable_mode(mode_type)
+
+    def capture_message(self, mode_type: VendorModeType, topic: str, payload: Dict[str, Any], protocol: str = "mqtt", message_type: str = None):
+        """Capture a vendor mode message for the live inspector.
+
+        Args:
+            mode_type: Type of vendor mode
+            topic: MQTT topic or identifier
+            payload: Message payload
+            protocol: Source protocol (mqtt, opcua, modbus, etc.)
+            message_type: Sparkplug B message type (NBIRTH, DBIRTH, NDATA, DDATA, etc.)
+        """
+        import time
+
+        # Extract industry from sensor_path if available
+        industry = None
+        if isinstance(payload, dict):
+            sensor_path = payload.get("sensor_path")
+            if sensor_path and "/" in sensor_path:
+                industry = sensor_path.split("/")[0]
+
+        # Extract Sparkplug B message type from topic if not provided
+        if not message_type and mode_type == VendorModeType.SPARKPLUG_B:
+            # Topic format: spBv1.0/{group_id}/{message_type}/{edge_node_id}/{device_id}
+            parts = topic.split("/")
+            if len(parts) >= 3:
+                message_type = parts[2]  # NBIRTH, DBIRTH, NDATA, DDATA, etc.
+
+        message = {
+            "timestamp": time.time(),
+            "mode": mode_type.value,
+            "topic": topic,
+            "payload": payload,
+            "protocol": protocol,
+            "industry": industry,
+            "message_type": message_type  # Add Sparkplug B message type
+        }
+        self.message_buffer.append(message)
+
+        # Track topic for MQTT protocol
+        if protocol == "mqtt" and topic:
+            if topic not in self.active_topics:
+                self.active_topics[topic] = {
+                    "mode": mode_type.value,
+                    "message_type": message_type,
+                    "first_seen": time.time(),
+                    "last_publish_time": time.time(),
+                    "message_count": 0
+                }
+            self.active_topics[topic]["last_publish_time"] = time.time()
+            self.active_topics[topic]["message_count"] += 1
+
+    def get_active_topics(self) -> Dict[str, Any]:
+        """Get currently active MQTT topics.
+
+        Returns:
+            Dictionary of topics with metadata including mode, message count, last publish time
+        """
+        import time
+        current_time = time.time()
+
+        # Build topic tree structure
+        topic_tree = {}
+        topic_list = []
+
+        for topic, info in self.active_topics.items():
+            # Calculate message rate (messages per second over last 60 seconds)
+            time_since_first = current_time - info["first_seen"]
+            message_rate = info["message_count"] / time_since_first if time_since_first > 0 else 0
+
+            topic_data = {
+                "topic": topic,
+                "mode": info["mode"],
+                "message_type": info.get("message_type"),
+                "message_count": info["message_count"],
+                "message_rate": round(message_rate, 2),
+                "last_publish": current_time - info["last_publish_time"],  # seconds ago
+            }
+            topic_list.append(topic_data)
+
+        # Sort by topic name
+        topic_list.sort(key=lambda x: x["topic"])
+
+        return {
+            "topics": topic_list,
+            "total_topics": len(topic_list),
+            "by_mode": self._group_topics_by_mode()
+        }
+
+    def _group_topics_by_mode(self) -> Dict[str, int]:
+        """Group topic counts by mode."""
+        by_mode = {}
+        for info in self.active_topics.values():
+            mode = info["mode"]
+            by_mode[mode] = by_mode.get(mode, 0) + 1
+        return by_mode
+
+    def get_recent_messages(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """Get recent messages from the buffer.
+
+        Args:
+            limit: Maximum number of messages to return
+
+        Returns:
+            List of recent messages (newest first)
+        """
+        # Return newest first
+        messages = list(self.message_buffer)
+        messages.reverse()
+        return messages[:limit]

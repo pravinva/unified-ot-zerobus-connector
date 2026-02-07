@@ -31,6 +31,7 @@ class SimulatorWebServer:
         self.app = web.Application()
         self.simulators: dict[str, Any] = {}
         self.simulator_tasks: dict[str, asyncio.Task] = {}
+        self.vendor_integration = None  # Will be initialized once by first simulator
 
         # Setup routes
         self._setup_routes()
@@ -911,7 +912,7 @@ class SimulatorWebServer:
             if protocol == "opcua":
                 from ot_simulator.opcua_simulator import OPCUASimulator
 
-                sim = OPCUASimulator(self.config.opcua)
+                sim = OPCUASimulator(self.config.opcua, simulator_manager=self)
                 self.simulators[protocol] = sim
                 task = asyncio.create_task(sim.start())
                 self.simulator_tasks[protocol] = task
@@ -919,7 +920,7 @@ class SimulatorWebServer:
             elif protocol == "mqtt":
                 from ot_simulator.mqtt_simulator import MQTTSimulator
 
-                sim = MQTTSimulator(self.config.mqtt)
+                sim = MQTTSimulator(self.config.mqtt, simulator_manager=self)
                 self.simulators[protocol] = sim
                 task = asyncio.create_task(sim.start())
                 self.simulator_tasks[protocol] = task
@@ -927,7 +928,7 @@ class SimulatorWebServer:
             elif protocol == "modbus":
                 from ot_simulator.modbus_simulator import ModbusSimulator
 
-                sim = ModbusSimulator(self.config.modbus)
+                sim = ModbusSimulator(self.config.modbus, simulator_manager=self)
                 self.simulators[protocol] = sim
                 if self.config.modbus.tcp.enabled:
                     task = asyncio.create_task(sim.start_tcp())

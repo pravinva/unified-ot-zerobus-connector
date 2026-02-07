@@ -1800,7 +1800,7 @@ def get_styles_html() -> str:
         }
 
         .mode-panel-title {
-            font-size: 18px;
+            font-size: 24px;
             font-weight: 700;
             margin-bottom: 8px;
             display: flex;
@@ -1809,7 +1809,7 @@ def get_styles_html() -> str:
         }
 
         .mode-panel-subtitle {
-            font-size: 13px;
+            font-size: 14px;
             opacity: 0.9;
         }
 
@@ -1822,7 +1822,7 @@ def get_styles_html() -> str:
         }
 
         .mode-section-title {
-            font-size: 14px;
+            font-size: 16px;
             font-weight: 700;
             color: #2E3036;
             margin-bottom: 16px;
@@ -2152,29 +2152,6 @@ def get_styles_html() -> str:
             border-radius: 4px;
         }
 
-        .message-protocol {
-            font-size: 10px;
-            font-weight: 600;
-            padding: 2px 8px;
-            border-radius: 4px;
-            margin-right: 8px;
-        }
-
-        .protocol-mqtt {
-            color: #10B981;
-            background: rgba(16, 185, 129, 0.2);
-        }
-
-        .protocol-opcua {
-            color: #3B82F6;
-            background: rgba(59, 130, 246, 0.2);
-        }
-
-        .protocol-modbus {
-            color: #8B5CF6;
-            background: rgba(139, 92, 246, 0.2);
-        }
-
         .message-payload {
             color: #D4D4D4;
             white-space: pre-wrap;
@@ -2330,7 +2307,7 @@ def get_styles_html() -> str:
             }
 
             .mode-panel-title {
-                font-size: 16px;
+                font-size: 20px;
             }
 
             .mode-card {
@@ -2355,12 +2332,12 @@ def get_body_html() -> str:
                 </div>
                 <div style="display: flex; gap: 12px;">
                     <a href="/wot/browser" style="padding: 12px 24px; background: linear-gradient(135deg, #00A9E0 0%, #0080B3 100%); color: white; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 12px rgba(0, 169, 224, 0.3); transition: all 0.3s;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 16px rgba(0, 169, 224, 0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(0, 169, 224, 0.3)'">
-                        
+                        <span style="font-size: 18px;">🌐</span>
                         <span>WoT Browser</span>
                         <span style="font-size: 10px; background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 12px;">379 sensors</span>
                     </a>
                     <button onclick="toggleOPCUABrowser()" style="padding: 12px 24px; background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%); color: white; border: none; border-radius: 8px; font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3); transition: all 0.3s; cursor: pointer;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 16px rgba(139, 92, 246, 0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(139, 92, 246, 0.3)'">
-                        
+                        <span style="font-size: 18px;">📡</span>
                         <span>Browse OPC-UA</span>
                     </button>
                 </div>
@@ -2370,13 +2347,10 @@ def get_body_html() -> str:
         <!-- Tab Navigation -->
         <div class="tab-navigation">
             <button class="tab-button active" onclick="switchTab('overview')" id="tab-overview">
-                Overview & Protocols
+                📊 Overview & Protocols
             </button>
             <button class="tab-button" onclick="switchTab('modes')" id="tab-modes">
-                Vendor Modes
-            </button>
-            <button class="tab-button" onclick="switchTab('connections')" id="tab-connections">
-                Connection Info
+                🔧 Vendor Modes
             </button>
         </div>
 
@@ -2385,7 +2359,7 @@ def get_body_html() -> str:
 
         <!-- Protocol Control (Full Width) -->
         <div class="card" style="margin-bottom: 24px;">
-            <div class="card-title">Protocol Simulators</div>
+            <div class="card-title">📡 Protocol Simulators</div>
             <div class="protocol-selector">
                 <!-- OPC-UA Protocol -->
                 <div class="protocol-item">
@@ -2438,30 +2412,17 @@ def get_body_html() -> str:
                         </div>
                         <div class="config-row">
                             <div class="config-field" style="flex: 2;">
-                                <label class="config-label">Select Sensors/Tags</label>
-                                <button class="btn-select-sensors" onclick="openSensorSelector('opcua')">Choose Sensors</button>
+                                <label class="config-label">Select Sensors/Tags 📊</label>
+                                <button class="btn-select-sensors" onclick="openSensorSelector('opcua')">🏷️ Choose Sensors</button>
                                 <div id="opcua-sensor-summary" class="sensor-summary">All sensors selected (379 total)</div>
                             </div>
                         </div>
                         <div class="config-actions">
-                            <button class="btn-save" onclick="saveZeroBusConfig('opcua')">Save Configuration</button>
-                            <button class="btn-test" onclick="testZeroBusConnection('opcua')">Test Connection</button>
+                            <button class="btn-save" onclick="saveZeroBusConfig('opcua')">💾 Save Configuration</button>
+                            <button class="btn-test" onclick="testZeroBusConnection('opcua')">🔌 Test Connection</button>
                             <button class="btn-start-zerobus" id="opcua-zerobus-btn" onclick="startZeroBusService('opcua')">▶️ Start Streaming</button>
                         </div>
                         <div id="opcua-diagnostics" class="diagnostics-panel"></div>
-
-                        <!-- Connected Clients Section -->
-                        <div id="opcua-clients-section" style="margin-top: 16px; padding: 16px; background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 6px;">
-                            <div style="font-size: 14px; font-weight: 600; color: #1F2937; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
-                                <span>Connected OPC UA Clients</span>
-                                <span id="opcua-client-count" style="font-size: 12px; font-weight: 500; color: #6B7280; background: white; padding: 4px 12px; border-radius: 12px;">0 clients</span>
-                            </div>
-                            <div id="opcua-clients-list" style="background: white; border: 1px solid #E5E7EB; border-radius: 6px; overflow: hidden;">
-                                <div style="padding: 20px; text-align: center; color: #9CA3AF; font-size: 13px;">
-                                    Loading client information...
-                                </div>
-                            </div>
-                        </div>
                     </div>
                 </div>
 
@@ -2516,30 +2477,17 @@ def get_body_html() -> str:
                         </div>
                         <div class="config-row">
                             <div class="config-field" style="flex: 2;">
-                                <label class="config-label">Select Sensors/Tags</label>
-                                <button class="btn-select-sensors" onclick="openSensorSelector('mqtt')">️ Choose Sensors</button>
+                                <label class="config-label">Select Sensors/Tags 📊</label>
+                                <button class="btn-select-sensors" onclick="openSensorSelector('mqtt')">🏷️ Choose Sensors</button>
                                 <div id="mqtt-sensor-summary" class="sensor-summary">All sensors selected (379 total)</div>
                             </div>
                         </div>
                         <div class="config-actions">
-                            <button class="btn-save" onclick="saveZeroBusConfig('mqtt')">Save Configuration</button>
-                            <button class="btn-test" onclick="testZeroBusConnection('mqtt')">Test Connection</button>
+                            <button class="btn-save" onclick="saveZeroBusConfig('mqtt')">💾 Save Configuration</button>
+                            <button class="btn-test" onclick="testZeroBusConnection('mqtt')">🔌 Test Connection</button>
                             <button class="btn-start-zerobus" id="mqtt-zerobus-btn" onclick="startZeroBusService('mqtt')">▶️ Start Streaming</button>
                         </div>
                         <div id="mqtt-diagnostics" class="diagnostics-panel"></div>
-
-                        <!-- MQTT Subscribers Section -->
-                        <div id="mqtt-subscribers-section" style="margin-top: 16px; padding: 16px; background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 6px;">
-                            <div style="font-size: 14px; font-weight: 600; color: #1F2937; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
-                                <span>MQTT Subscribers</span>
-                                <span id="mqtt-subscriber-count" style="font-size: 12px; font-weight: 500; color: #6B7280; background: white; padding: 4px 12px; border-radius: 12px;">N/A</span>
-                            </div>
-                            <div id="mqtt-subscribers-list" style="background: white; border: 1px solid #E5E7EB; border-radius: 6px; overflow: hidden;">
-                                <div style="padding: 20px; text-align: center; color: #9CA3AF; font-size: 13px;">
-                                    Loading subscriber information...
-                                </div>
-                            </div>
-                        </div>
                     </div>
                 </div>
 
@@ -2594,14 +2542,14 @@ def get_body_html() -> str:
                         </div>
                         <div class="config-row">
                             <div class="config-field" style="flex: 2;">
-                                <label class="config-label">Select Sensors/Tags</label>
-                                <button class="btn-select-sensors" onclick="openSensorSelector('modbus')">️ Choose Sensors</button>
+                                <label class="config-label">Select Sensors/Tags 📊</label>
+                                <button class="btn-select-sensors" onclick="openSensorSelector('modbus')">🏷️ Choose Sensors</button>
                                 <div id="modbus-sensor-summary" class="sensor-summary">All sensors selected (379 total)</div>
                             </div>
                         </div>
                         <div class="config-actions">
-                            <button class="btn-save" onclick="saveZeroBusConfig('modbus')">Save Configuration</button>
-                            <button class="btn-test" onclick="testZeroBusConnection('modbus')">Test Connection</button>
+                            <button class="btn-save" onclick="saveZeroBusConfig('modbus')">💾 Save Configuration</button>
+                            <button class="btn-test" onclick="testZeroBusConnection('modbus')">🔌 Test Connection</button>
                             <button class="btn-start-zerobus" id="modbus-zerobus-btn" onclick="startZeroBusService('modbus')">▶️ Start Streaming</button>
                         </div>
                         <div id="modbus-diagnostics" class="diagnostics-panel"></div>
@@ -2613,7 +2561,7 @@ def get_body_html() -> str:
         <!-- Training Platform -->
         <div class="card" style="margin-bottom: 24px;">
             <div class="card-title" style="cursor: pointer; display: flex; align-items: center; justify-content: space-between;" onclick="toggleTrainingPanel()">
-                <span>Training Platform</span>
+                <span>🎯 Training Platform</span>
                 <span id="training-toggle-icon" style="transition: transform 0.3s;">▼</span>
             </div>
             <div class="training-panel" id="training-panel" style="display: none; margin-top: 20px;">
@@ -2627,7 +2575,7 @@ def get_body_html() -> str:
             <div class="sidebar">
                 <!-- Sensor Browser -->
                 <div class="card">
-                    <div class="card-title">Add Sensors to Chart</div>
+                    <div class="card-title">🔍 Add Sensors to Chart</div>
                     <div class="sensor-browser" id="sensor-browser">
                         <!-- Populated dynamically -->
                     </div>
@@ -2637,7 +2585,7 @@ def get_body_html() -> str:
             <!-- Raw Data Stream Section -->
             <div class="card" style="margin-bottom: 24px;">
                 <div class="card-title" style="display: flex; justify-content: space-between; align-items: center;">
-                    <span>Raw Data Stream</span>
+                    <span>📊 Raw Data Stream</span>
                     <div style="display: flex; gap: 12px; align-items: center;">
                         <select id="raw-protocol-filter" class="config-input" style="width: auto; padding: 6px 12px; font-size: 13px;">
                             <option value="">All Protocols</option>
@@ -2665,9 +2613,9 @@ def get_body_html() -> str:
                 </div>
                 <div style="margin-top: 12px; padding: 12px; background: #F9FAFB; border-radius: 6px; font-size: 13px; color: #6B7280;">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <span>Records shown: <strong id="raw-record-count">0</strong></span>
-                        <span>Update rate: 2 seconds</span>
-                        <span>Auto-scroll: <strong>Enabled</strong></span>
+                        <span>📈 Records shown: <strong id="raw-record-count">0</strong></span>
+                        <span>⏱️ Update rate: 2 seconds</span>
+                        <span>🔄 Auto-scroll: <strong>Enabled</strong></span>
                     </div>
                 </div>
             </div>
@@ -2681,7 +2629,7 @@ def get_body_html() -> str:
 
     <!-- Operations AI Assistant Button -->
     <button class="nlp-chat-button" id="nlp-chat-toggle">
-        Operations AI Assistant
+        🤖 Operations AI Assistant
     </button>
 
     <!-- Chat Panel -->
@@ -2693,7 +2641,7 @@ def get_body_html() -> str:
 
         <div class="chat-messages" id="chat-messages">
             <div class="message agent">
-                <div class="message-avatar"></div>
+                <div class="message-avatar">🤖</div>
                 <div class="message-content">
                     <div class="message-bubble">
                         <strong>Operations AI Assistant</strong><br>
@@ -2835,7 +2783,7 @@ def get_body_html() -> str:
                         <button class="mode-toggle" id="toggle-generic" onclick="event.stopPropagation(); toggleMode('generic')"></button>
                         <div class="mode-card-header">
                             <div class="mode-card-title">
-                                Generic Mode
+                                🏭 Generic Mode
                             </div>
                         </div>
                         <div class="mode-card-badge disabled" id="badge-generic">Disabled</div>
@@ -2863,7 +2811,7 @@ def get_body_html() -> str:
                         <button class="mode-toggle" id="toggle-kepware" onclick="event.stopPropagation(); toggleMode('kepware')"></button>
                         <div class="mode-card-header">
                             <div class="mode-card-title">
-                                Kepware KEPServerEX
+                                ⚙️ Kepware KEPServerEX
                             </div>
                         </div>
                         <div class="mode-card-badge disabled" id="badge-kepware">Disabled</div>
@@ -2891,7 +2839,7 @@ def get_body_html() -> str:
                         <button class="mode-toggle" id="toggle-sparkplug_b" onclick="event.stopPropagation(); toggleMode('sparkplug_b')"></button>
                         <div class="mode-card-header">
                             <div class="mode-card-title">
-                                Sparkplug B
+                                ⚡ Sparkplug B
                             </div>
                         </div>
                         <div class="mode-card-badge disabled" id="badge-sparkplug_b">Disabled</div>
@@ -2919,7 +2867,7 @@ def get_body_html() -> str:
                         <button class="mode-toggle" id="toggle-honeywell" onclick="event.stopPropagation(); toggleMode('honeywell')"></button>
                         <div class="mode-card-header">
                             <div class="mode-card-title">
-                                ️ Honeywell Experion PKS
+                                🏗️ Honeywell Experion PKS
                             </div>
                         </div>
                         <div class="mode-card-badge disabled" id="badge-honeywell">Disabled</div>
@@ -2948,12 +2896,12 @@ def get_body_html() -> str:
                 <!-- Generic Mode Panel -->
                 <div class="mode-panel" id="panel-generic">
                     <div class="mode-panel-header">
-                        <div class="mode-panel-title">Generic Mode</div>
+                        <div class="mode-panel-title">🏭 Generic Mode</div>
                         <div class="mode-panel-subtitle">Standard OT data format • Simple structure • Universal compatibility</div>
                     </div>
                     <div class="mode-panel-body">
                         <div class="mode-section">
-                            <div class="mode-section-title">Real-Time Metrics</div>
+                            <div class="mode-section-title">📊 Real-Time Metrics</div>
                             <div class="mode-metrics-grid">
                                 <div class="mode-metric-card">
                                     <div class="mode-metric-label">Messages/Sec</div>
@@ -2981,7 +2929,7 @@ def get_body_html() -> str:
                         </div>
 
                         <div class="mode-section">
-                            <div class="mode-section-title">Message Format</div>
+                            <div class="mode-section-title">📋 Message Format</div>
                             <div style="background: #1E1E1E; color: #D4D4D4; padding: 16px; border-radius: 8px; font-family: 'Monaco', 'Courier New', monospace; font-size: 12px; line-height: 1.6;">
 {
   <span style="color: #9CDCFE;">"sensor"</span>: <span style="color: #CE9178;">"crusher_1_motor_power"</span>,
@@ -2999,12 +2947,12 @@ def get_body_html() -> str:
                 <!-- Kepware Mode Panel -->
                 <div class="mode-panel" id="panel-kepware">
                     <div class="mode-panel-header">
-                        <div class="mode-panel-title">Kepware KEPServerEX Mode</div>
+                        <div class="mode-panel-title">⚙️ Kepware KEPServerEX Mode</div>
                         <div class="mode-panel-subtitle">Channel.Device.Tag hierarchy • IoT Gateway JSON • 100K+ global installations</div>
                     </div>
                     <div class="mode-panel-body">
                         <div class="mode-section">
-                            <div class="mode-section-title">Performance Metrics</div>
+                            <div class="mode-section-title">📊 Performance Metrics</div>
                             <div class="mode-metrics-grid">
                                 <div class="mode-metric-card">
                                     <div class="mode-metric-label">Messages/Sec</div>
@@ -3026,7 +2974,7 @@ def get_body_html() -> str:
                         </div>
 
                         <div class="mode-section">
-                            <div class="mode-section-title">️ Channel/Device/Tag Structure</div>
+                            <div class="mode-section-title">🗂️ Channel/Device/Tag Structure</div>
                             <div id="kepware-structure" class="kepware-structure">
                                 <!-- Dynamically populated -->
                                 <div style="text-align: center; padding: 40px; color: #6B7280;">
@@ -3036,7 +2984,7 @@ def get_body_html() -> str:
                         </div>
 
                         <div class="mode-section">
-                            <div class="mode-section-title">IoT Gateway Message Format</div>
+                            <div class="mode-section-title">📋 IoT Gateway Message Format</div>
                             <div style="background: #1E1E1E; color: #D4D4D4; padding: 16px; border-radius: 8px; font-family: 'Monaco', 'Courier New', monospace; font-size: 12px; line-height: 1.6;">
 {
   <span style="color: #9CDCFE;">"timestamp"</span>: <span style="color: #B5CEA8;">1738851825000</span>,
@@ -3051,7 +2999,7 @@ def get_body_html() -> str:
                         </div>
 
                         <div class="mode-section">
-                            <div class="mode-section-title">Quality Distribution</div>
+                            <div class="mode-section-title">📈 Quality Distribution</div>
                             <div class="quality-distribution">
                                 <div class="quality-bar good" style="flex: 0.85;">
                                     <span id="kepware-quality-good">85%</span> GOOD
@@ -3070,12 +3018,12 @@ def get_body_html() -> str:
                 <!-- Sparkplug B Mode Panel -->
                 <div class="mode-panel" id="panel-sparkplug_b">
                     <div class="mode-panel-header">
-                        <div class="mode-panel-title">Sparkplug B Mode</div>
+                        <div class="mode-panel-title">⚡ Sparkplug B Mode</div>
                         <div class="mode-panel-subtitle">Industrial IoT Protocol • State-Aware • BIRTH/DATA/DEATH Lifecycle</div>
                     </div>
                     <div class="mode-panel-body">
                         <div class="mode-section">
-                            <div class="mode-section-title">Protocol Metrics</div>
+                            <div class="mode-section-title">📊 Protocol Metrics</div>
                             <div class="mode-metrics-grid">
                                 <div class="mode-metric-card">
                                     <div class="mode-metric-label">Messages/Sec</div>
@@ -3097,7 +3045,7 @@ def get_body_html() -> str:
                         </div>
 
                         <div class="mode-section">
-                            <div class="mode-section-title">Edge Node Status</div>
+                            <div class="mode-section-title">🌐 Edge Node Status</div>
                             <div id="sparkplug-nodes" class="sparkplug-edge-nodes">
                                 <!-- Dynamically populated -->
                                 <div style="text-align: center; padding: 40px; color: #6B7280;">
@@ -3107,7 +3055,7 @@ def get_body_html() -> str:
                         </div>
 
                         <div class="mode-section">
-                            <div class="mode-section-title">Lifecycle Events Timeline</div>
+                            <div class="mode-section-title">📅 Lifecycle Events Timeline</div>
                             <div id="sparkplug-timeline" class="lifecycle-timeline">
                                 <!-- Dynamically populated -->
                                 <div style="text-align: center; padding: 40px; color: #6B7280;">
@@ -3117,7 +3065,7 @@ def get_body_html() -> str:
                         </div>
 
                         <div class="mode-section">
-                            <div class="mode-section-title">Sparkplug B Message Formats</div>
+                            <div class="mode-section-title">📋 Sparkplug B Message Formats</div>
                             <div style="margin-bottom: 16px;">
                                 <strong style="color: #10B981;">NBIRTH (Node Birth):</strong>
                                 <div style="background: #1E1E1E; color: #D4D4D4; padding: 12px; border-radius: 6px; margin-top: 8px; font-family: 'Monaco', 'Courier New', monospace; font-size: 11px;">
@@ -3146,12 +3094,12 @@ spBv1.0/group_id/NDEATH/edge_node_id
                 <!-- Honeywell Mode Panel -->
                 <div class="mode-panel" id="panel-honeywell">
                     <div class="mode-panel-header">
-                        <div class="mode-panel-title">️ Honeywell Experion PKS Mode</div>
+                        <div class="mode-panel-title">🏗️ Honeywell Experion PKS Mode</div>
                         <div class="mode-panel-subtitle">Process Control • Composite Points • FIM/ACE/LCN Modules</div>
                     </div>
                     <div class="mode-panel-body">
                         <div class="mode-section">
-                            <div class="mode-section-title">System Metrics</div>
+                            <div class="mode-section-title">📊 System Metrics</div>
                             <div class="mode-metrics-grid">
                                 <div class="mode-metric-card">
                                     <div class="mode-metric-label">Messages/Sec</div>
@@ -3173,7 +3121,7 @@ spBv1.0/group_id/NDEATH/edge_node_id
                         </div>
 
                         <div class="mode-section">
-                            <div class="mode-section-title">️ Module Structure</div>
+                            <div class="mode-section-title">🏗️ Module Structure</div>
                             <div id="honeywell-modules-view" class="honeywell-modules">
                                 <!-- Dynamically populated -->
                                 <div style="text-align: center; padding: 40px; color: #6B7280;">
@@ -3183,7 +3131,7 @@ spBv1.0/group_id/NDEATH/edge_node_id
                         </div>
 
                         <div class="mode-section">
-                            <div class="mode-section-title">Composite Point Format</div>
+                            <div class="mode-section-title">📋 Composite Point Format</div>
                             <div style="background: #1E1E1E; color: #D4D4D4; padding: 16px; border-radius: 8px; font-family: 'Monaco', 'Courier New', monospace; font-size: 12px; line-height: 1.6;">
 {
   <span style="color: #9CDCFE;">"point"</span>: <span style="color: #CE9178;">"FIC101.PV"</span>,
@@ -3207,27 +3155,14 @@ spBv1.0/group_id/NDEATH/edge_node_id
                 <div class="mode-section" style="margin-top: 32px;">
                     <div class="message-inspector">
                         <div class="message-inspector-header">
-                            <div class="message-inspector-title">Live Message Inspector</div>
+                            <div class="message-inspector-title">📡 Live Message Inspector</div>
                             <div class="message-inspector-controls">
-                                <select id="inspector-protocol-filter" class="config-input" style="width: auto; padding: 6px 12px; font-size: 12px; margin-right: 8px;">
-                                    <option value="">All Protocols</option>
-                                    <option value="mqtt">MQTT</option>
-                                    <option value="opcua">OPC-UA</option>
-                                    <option value="modbus">Modbus</option>
-                                </select>
-                                <select id="inspector-mode-filter" class="config-input" style="width: auto; padding: 6px 12px; font-size: 12px; margin-right: 8px;">
+                                <select id="inspector-mode-filter" class="config-input" style="width: auto; padding: 6px 12px; font-size: 12px;">
                                     <option value="">All Modes</option>
                                     <option value="generic">Generic</option>
                                     <option value="kepware">Kepware</option>
                                     <option value="sparkplug_b">Sparkplug B</option>
                                     <option value="honeywell">Honeywell</option>
-                                </select>
-                                <select id="inspector-industry-filter" class="config-input" style="width: auto; padding: 6px 12px; font-size: 12px; margin-right: 8px;">
-                                    <option value="">All Industries</option>
-                                    <option value="mining">Mining</option>
-                                    <option value="utilities">Utilities</option>
-                                    <option value="manufacturing">Manufacturing</option>
-                                    <option value="oil_gas">Oil & Gas</option>
                                 </select>
                                 <button class="btn-test" onclick="toggleMessageInspector()" id="inspector-toggle-btn">Start</button>
                                 <button class="btn-test" onclick="clearMessageInspector()">Clear</button>
@@ -3244,38 +3179,6 @@ spBv1.0/group_id/NDEATH/edge_node_id
             </div>
         </div>
         <!-- End Vendor Modes Tab -->
-
-        <!-- Connection Info Tab Content -->
-        <div class="tab-content" id="content-connections">
-            <div class="card" style="margin-bottom: 24px;">
-                <div class="card-title">Protocol Endpoints</div>
-                <div id="connection-protocols" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 16px;">
-                    <!-- Protocols will be loaded here -->
-                </div>
-            </div>
-
-            <div class="card" style="margin-bottom: 24px;">
-                <div class="card-title">Vendor Mode Topic/Node Patterns</div>
-                <div id="connection-vendor-modes" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 16px;">
-                    <!-- Vendor modes will be loaded here -->
-                </div>
-            </div>
-
-            <div class="card" style="margin-bottom: 24px;">
-                <div class="card-title">PLC Controllers</div>
-                <div id="connection-plcs" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px;">
-                    <!-- PLCs will be loaded here -->
-                </div>
-            </div>
-
-            <div class="card">
-                <div class="card-title">Connection Examples</div>
-                <div id="connection-examples" style="display: flex; flex-direction: column; gap: 20px;">
-                    <!-- Examples will be loaded here -->
-                </div>
-            </div>
-        </div>
-        <!-- End Connection Info Tab -->
 
     </div>"""
 
@@ -3382,14 +3285,14 @@ def get_scripts_html() -> str:
                 let response = '';
                 if (data.action === 'start') {
                     // Use backend message first, fall back to constructed message
-                    response = data.message || `${data.target ? data.target.toUpperCase() : 'Protocol'} started successfully!`;
+                    response = data.message || `✓ ${data.target ? data.target.toUpperCase() : 'Protocol'} started successfully!`;
                 } else if (data.action === 'stop') {
                     // Use backend message first, fall back to constructed message
-                    response = data.message || `${data.target ? data.target.toUpperCase() : 'Protocol'} stopped successfully!`;
+                    response = data.message || `✓ ${data.target ? data.target.toUpperCase() : 'Protocol'} stopped successfully!`;
                 } else if (data.action === 'inject_fault') {
                     // Use backend message first, fall back to constructed message
                     const duration = data.parameters?.duration || '?';
-                    response = data.message || `Fault injected into ${data.target} for ${duration}s`;
+                    response = data.message || `✓ Fault injected into ${data.target} for ${duration}s`;
                 } else if (data.action === 'status') {
                     // Show the full status message from backend
                     response = data.message || 'Status information updated';
@@ -3406,7 +3309,7 @@ def get_scripts_html() -> str:
 
                 // Show error if command failed
                 if (!data.success) {
-                    response = `${data.message || 'Command failed'}`;
+                    response = `❌ ${data.message || 'Command failed'}`;
                 }
 
                 // For list_sensors action, don't show reasoning separately (it's redundant)
@@ -3422,7 +3325,7 @@ def get_scripts_html() -> str:
                 // Handle error messages
                 console.error('WebSocket error:', data);
                 removeTypingIndicator();
-                addMessage('agent', `Error: ${data.message}`);
+                addMessage('agent', `❌ Error: ${data.message}`);
             }
         }
 
@@ -5219,7 +5122,7 @@ def get_scripts_html() -> str:
                 // Validate required fields
                 if (!config.workspace_host || !config.zerobus_endpoint ||
                     !config.target.catalog || !config.target.schema || !config.target.table) {
-                    diagnostics.innerHTML = '<div class="error">Please fill in all required fields (workspace, endpoint, and table in format catalog.schema.table)</div>';
+                    diagnostics.innerHTML = '<div class="error">❌ Please fill in all required fields (workspace, endpoint, and table in format catalog.schema.table)</div>';
                     return;
                 }
 
@@ -5242,19 +5145,19 @@ def get_scripts_html() -> str:
                 console.log('Response data:', data);
 
                 if (data.success) {
-                    diagnostics.innerHTML = `<div class="success">Configuration saved successfully for ${protocol.toUpperCase()}<br><small>Config file: ${data.config_file}</small></div>`;
+                    diagnostics.innerHTML = `<div class="success">✅ Configuration saved successfully for ${protocol.toUpperCase()}<br><small>Config file: ${data.config_file}</small></div>`;
                 } else {
-                    diagnostics.innerHTML = `<div class="error">Error: ${data.message}${data.detail ? '<br><small>' + data.detail + '</small>' : ''}</div>`;
+                    diagnostics.innerHTML = `<div class="error">❌ Error: ${data.message}${data.detail ? '<br><small>' + data.detail + '</small>' : ''}</div>`;
                 }
             } catch (error) {
                 console.error('Error saving config:', error);
-                diagnostics.innerHTML = `<div class="error">Error saving configuration: ${error.message}</div>`;
+                diagnostics.innerHTML = `<div class="error">❌ Error saving configuration: ${error.message}</div>`;
             }
         }
 
         async function testZeroBusConnection(protocol) {
             const diagnostics = document.getElementById(`${protocol}-diagnostics`);
-            diagnostics.innerHTML = '<div class="info">Testing Zero-Bus connection...</div>';
+            diagnostics.innerHTML = '<div class="info">🔄 Testing Zero-Bus connection...</div>';
 
             // Parse target table (format: catalog.schema.table)
             const targetField = document.getElementById(`${protocol}-target`);
@@ -5277,7 +5180,7 @@ def get_scripts_html() -> str:
             // Validate required fields
             if (!config.workspace_host || !config.zerobus_endpoint ||
                 !config.target.catalog || !config.target.schema || !config.target.table) {
-                diagnostics.innerHTML = '<div class="error">Please fill in all required fields (workspace, endpoint, and table in format catalog.schema.table)</div>';
+                diagnostics.innerHTML = '<div class="error">❌ Please fill in all required fields (workspace, endpoint, and table in format catalog.schema.table)</div>';
                 return;
             }
 
@@ -5297,13 +5200,13 @@ def get_scripts_html() -> str:
                 const data = await response.json();
 
                 if (data.success) {
-                    diagnostics.innerHTML = `<div class="success">Connection successful!<br><strong>Table:</strong> ${data.table_name}<br><strong>Stream ID:</strong> ${data.stream_id}</div>`;
+                    diagnostics.innerHTML = `<div class="success">✅ Connection successful!<br><strong>Table:</strong> ${data.table_name}<br><strong>Stream ID:</strong> ${data.stream_id}</div>`;
                 } else {
-                    diagnostics.innerHTML = `<div class="error">Connection failed:<br>${data.message}${data.detail ? '<br><small>' + data.detail + '</small>' : ''}</div>`;
+                    diagnostics.innerHTML = `<div class="error">❌ Connection failed:<br>${data.message}${data.detail ? '<br><small>' + data.detail + '</small>' : ''}</div>`;
                 }
             } catch (error) {
                 console.error('Error testing connection:', error);
-                diagnostics.innerHTML = `<div class="error">Error testing connection: ${error.message}</div>`;
+                diagnostics.innerHTML = `<div class="error">❌ Error testing connection: ${error.message}</div>`;
             }
         }
 
@@ -5333,12 +5236,12 @@ def get_scripts_html() -> str:
                         btn.className = 'btn-start-zerobus';
                         diagnostics.innerHTML = `<div class="success">${result.message}</div>`;
                     } else {
-                        diagnostics.innerHTML = `<div class="error">${result.message}</div>`;
+                        diagnostics.innerHTML = `<div class="error">❌ ${result.message}</div>`;
                         btn.textContent = '⏹ Stop Streaming';
                         btn.className = 'btn-stop-zerobus';
                     }
                 } catch (error) {
-                    diagnostics.innerHTML = `<div class="error">Error stopping stream: ${error.message}</div>`;
+                    diagnostics.innerHTML = `<div class="error">❌ Error stopping stream: ${error.message}</div>`;
                     btn.textContent = '⏹ Stop Streaming';
                     btn.className = 'btn-stop-zerobus';
                 } finally {
@@ -5361,16 +5264,16 @@ def get_scripts_html() -> str:
                     if (result.success) {
                         btn.textContent = '⏹ Stop Streaming';
                         btn.className = 'btn-stop-zerobus';
-                        diagnostics.innerHTML = `<div class="success">${result.message}<br>Data is being streamed to Zero-Bus every 5 seconds.</div>`;
+                        diagnostics.innerHTML = `<div class="success">✅ ${result.message}<br>Data is being streamed to Zero-Bus every 5 seconds.</div>`;
                         // Update status periodically
                         updateStreamingStatus(protocol);
                     } else {
-                        diagnostics.innerHTML = `<div class="error">${result.message}</div>`;
+                        diagnostics.innerHTML = `<div class="error">❌ ${result.message}</div>`;
                         btn.textContent = '▶️ Start Streaming';
                         btn.className = 'btn-start-zerobus';
                     }
                 } catch (error) {
-                    diagnostics.innerHTML = `<div class="error">Error starting stream: ${error.message}</div>`;
+                    diagnostics.innerHTML = `<div class="error">❌ Error starting stream: ${error.message}</div>`;
                     btn.textContent = '▶️ Start Streaming';
                     btn.className = 'btn-start-zerobus';
                 } finally {
@@ -5459,7 +5362,7 @@ def get_scripts_html() -> str:
                         }
                     }
 
-                    console.log(`Loaded saved configuration for ${protocol}`);
+                    console.log(`✅ Loaded saved configuration for ${protocol}`);
                 } else {
                     console.log(`ℹ️ No saved configuration found for ${protocol}`);
                 }
@@ -5491,7 +5394,7 @@ def get_scripts_html() -> str:
 
             const avatar = document.createElement('div');
             avatar.className = 'message-avatar';
-            avatar.textContent = role === 'user' ? '' : '️';
+            avatar.textContent = role === 'user' ? '👤' : '🎛️';
 
             const contentDiv = document.createElement('div');
             contentDiv.className = 'message-content';
@@ -5507,7 +5410,7 @@ def get_scripts_html() -> str:
             if (reasoning && role === 'agent') {
                 const reasoningDiv = document.createElement('div');
                 reasoningDiv.className = 'message-reasoning';
-                reasoningDiv.textContent = `${reasoning}`;
+                reasoningDiv.textContent = `💭 ${reasoning}`;
                 contentDiv.appendChild(reasoningDiv);
             }
 
@@ -5525,7 +5428,7 @@ def get_scripts_html() -> str:
 
             const avatar = document.createElement('div');
             avatar.className = 'message-avatar';
-            avatar.textContent = '️';
+            avatar.textContent = '🎛️';
 
             const typingDiv = document.createElement('div');
             typingDiv.className = 'typing-indicator';
@@ -5575,7 +5478,7 @@ def get_scripts_html() -> str:
                 addTypingIndicator();
             } else {
                 console.error('WebSocket not connected, state:', ws?.readyState);
-                addMessage('agent', 'WebSocket connection not available. Please refresh the page.');
+                addMessage('agent', '❌ WebSocket connection not available. Please refresh the page.');
             }
         }
 
@@ -5990,15 +5893,15 @@ def get_scripts_html() -> str:
             const icon = document.createElement('span');
             icon.className = 'tree-icon';
             if (node.type === 'root' || node.type === 'folder') {
-                icon.textContent = '▸';
+                icon.textContent = '📁';
             } else if (node.type === 'plc') {
-                icon.textContent = '⊙';
+                icon.textContent = '⚙️';
             } else if (node.type === 'industry') {
-                icon.textContent = '◆';
+                icon.textContent = '🏭';
             } else if (node.type === 'sensor') {
-                icon.textContent = '●';
+                icon.textContent = '📊';
             } else {
-                icon.textContent = '○';
+                icon.textContent = '📄';
             }
             header.appendChild(icon);
 
@@ -6392,11 +6295,6 @@ def get_scripts_html() -> str:
             if (tabName === 'modes') {
                 refreshVendorModes();
             }
-
-            // If switching to connections tab, load connection info
-            if (tabName === 'connections') {
-                loadConnectionInfo();
-            }
         }
 
         // Current selected mode
@@ -6425,15 +6323,9 @@ def get_scripts_html() -> str:
         // Toggle mode on/off
         async function toggleMode(modeName) {
             try {
-                // Get current state
-                const toggleButton = document.getElementById(`toggle-${modeName}`);
-                const currentlyEnabled = toggleButton.classList.contains('enabled');
-                const newState = !currentlyEnabled;
-
                 const response = await fetch(`/api/modes/${modeName}/toggle`, {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ enabled: newState })
+                    headers: {'Content-Type': 'application/json'}
                 });
 
                 if (!response.ok) {
@@ -6462,11 +6354,10 @@ def get_scripts_html() -> str:
                 }
 
                 const data = await response.json();
-                const modes = data.modes || [];
+                const modes = data.modes || {};
 
                 // Update each mode card
-                for (const modeData of modes) {
-                    const modeName = modeData.mode_type;
+                for (const [modeName, modeData] of Object.entries(modes)) {
                     updateModeCard(modeName, modeData);
                 }
 
@@ -6482,7 +6373,9 @@ def get_scripts_html() -> str:
 
         // Update mode card UI
         function updateModeCard(modeName, modeData) {
-            const enabled = modeData.enabled || false;
+            const config = modeData.config || {};
+            const metrics = modeData.metrics || {};
+            const enabled = config.enabled || false;
 
             // Update toggle button
             const toggle = document.getElementById('toggle-' + modeName);
@@ -6508,10 +6401,7 @@ def get_scripts_html() -> str:
                 card.classList.toggle('disabled', !enabled);
             }
 
-            // Update mode-specific stats if available
-            const metrics = modeData.metrics || {};
-            const diagnostics = modeData.diagnostics || {};
-
+            // Update mode-specific stats
             if (modeName === 'generic') {
                 updateElement('stat-generic-messages', metrics.messages_sent || 0);
                 updateElement('stat-generic-sensors', metrics.sensors_registered || 0);
@@ -6519,6 +6409,7 @@ def get_scripts_html() -> str:
                 updateElement('stat-generic-quality', qualityPct > 0 ? Math.round(qualityPct) + '%' : '—');
             }
             else if (modeName === 'kepware') {
+                const diagnostics = modeData.diagnostics || {};
                 updateElement('stat-kepware-channels', diagnostics.total_channels || 0);
                 updateElement('stat-kepware-devices', diagnostics.total_devices || 0);
                 updateElement('stat-kepware-tags', diagnostics.total_tags || 0);
@@ -6585,299 +6476,23 @@ def get_scripts_html() -> str:
 
             let html = '';
             for (const channel of channels) {
-                const devices = channel.devices || [];
-
                 html += `
-                    <div class="kepware-channel" style="margin-bottom: 24px;">
-                        <div class="kepware-channel-header" style="background: #F3F4F6; padding: 12px 16px; border-radius: 8px 8px 0 0; border-bottom: 2px solid #F59E0B;">
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <div>
-                                    <div class="kepware-channel-name" style="font-size: 16px; font-weight: 600; color: #1F2937;">${escapeHtml(channel.name)}</div>
-                                    <div style="font-size: 12px; color: #6B7280; margin-top: 4px;">
-                                        <strong>PLC:</strong> ${escapeHtml(channel.plc_vendor)} ${escapeHtml(channel.plc_model)} •
-                                        <strong>Driver:</strong> ${escapeHtml(channel.driver_type)}
-                                    </div>
-                                </div>
-                                <div style="text-align: right; font-size: 13px; color: #6B7280;">
-                                    <div><strong>${channel.device_count || 0}</strong> devices</div>
-                                    <div><strong>${channel.tag_count || 0}</strong> tags</div>
-                                </div>
+                    <div class="kepware-channel">
+                        <div class="kepware-channel-header">
+                            <div class="kepware-channel-name">${escapeHtml(channel.name)}</div>
+                            <div style="font-size: 12px; color: #6B7280;">
+                                ${channel.device_count || 0} devices • ${channel.tag_count || 0} tags
                             </div>
-                        </div>
-
-                        <div style="background: white; border: 1px solid #E5E7EB; border-top: none; border-radius: 0 0 8px 8px; overflow: hidden;">
-                            <div style="display: grid; grid-template-columns: 2fr 2fr 1fr 1fr; gap: 12px; padding: 10px 16px; background: #FAFAFA; font-weight: 600; font-size: 11px; color: #6B7280; text-transform: uppercase; border-bottom: 1px solid #E5E7EB;">
-                                <div>Device</div>
-                                <div>Equipment Type</div>
-                                <div>Tags</div>
-                                <div>Status</div>
-                            </div>
-                `;
-
-                if (devices.length === 0) {
-                    html += `
-                        <div style="padding: 20px; text-align: center; color: #9CA3AF; font-size: 13px;">
-                            No devices configured
-                        </div>
-                    `;
-                } else {
-                    for (const device of devices) {
-                        html += `
-                            <div style="display: grid; grid-template-columns: 2fr 2fr 1fr 1fr; gap: 12px; padding: 12px 16px; font-size: 13px; border-bottom: 1px solid #F3F4F6;">
-                                <div style="font-weight: 500; color: #1F2937;">${escapeHtml(device.name)}</div>
-                                <div style="color: #6B7280;">${escapeHtml(device.equipment_type)}</div>
-                                <div style="color: #6B7280;">${device.tag_count || 0}</div>
-                                <div style="font-weight: 500;">${device.status}</div>
-                            </div>
-                        `;
-                    }
-                }
-
-                html += `
                         </div>
                     </div>
                 `;
             }
-
-            // Add Quality Distribution section
-            html += `
-                <div style="margin-top: 24px;">
-                    <div style="font-size: 16px; font-weight: 600; color: #1F2937; margin-bottom: 12px;">
-                        Quality Distribution
-                    </div>
-                    <div id="kepware-quality-dist" style="background: white; border: 1px solid #E5E7EB; border-radius: 6px; padding: 16px;">
-                        Loading quality data...
-                    </div>
-                </div>
-            `;
-
-            // Add Sample Tags section at the end
-            html += `
-                <div style="margin-top: 24px;">
-                    <div style="font-size: 16px; font-weight: 600; color: #1F2937; margin-bottom: 12px;">
-                        Sample Tags (Live Values)
-                    </div>
-                    <div id="kepware-sample-tags" style="background: white; border: 1px solid #E5E7EB; border-radius: 6px; overflow: hidden;">
-                        <div style="padding: 20px; text-align: center; color: #9CA3AF; font-size: 13px;">
-                            Loading sample tags...
-                        </div>
-                    </div>
-                </div>
-            `;
-
             container.innerHTML = html;
 
             // Update metrics
             updateElement('kepware-channels', diagnostics.total_channels || 0);
             updateElement('kepware-devices', diagnostics.total_devices || 0);
             updateElement('kepware-tags', diagnostics.total_tags || 0);
-
-            // Fetch and display sample tags with current values and quality distribution
-            fetchKepwareQualityDistribution();
-            fetchKepwareSampleTags();
-        }
-
-        // Fetch and display quality distribution for Kepware
-        async function fetchKepwareQualityDistribution() {
-            try {
-                const response = await fetch('/api/modes/kepware');
-                const data = await response.json();
-
-                const container = document.getElementById('kepware-quality-dist');
-                if (!container) return;
-
-                const metrics = data.metrics || {};
-                const qualityDist = metrics.quality_distribution || {};
-                const good = qualityDist.good || 0;
-                const bad = qualityDist.bad || 0;
-                const uncertain = qualityDist.uncertain || 0;
-                const total = good + bad + uncertain;
-
-                if (total === 0) {
-                    container.innerHTML = `
-                        <div style="text-align: center; color: #9CA3AF; font-size: 13px;">
-                            No quality data available. Start publishing messages to see distribution.
-                        </div>
-                    `;
-                    return;
-                }
-
-                const goodPct = ((good / total) * 100).toFixed(1);
-                const badPct = ((bad / total) * 100).toFixed(1);
-                const uncertainPct = ((uncertain / total) * 100).toFixed(1);
-
-                // Build quality distribution bars
-                let html = `
-                    <div style="margin-bottom: 16px;">
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px;">
-                            <span style="font-weight: 500; color: #10B981;">Good</span>
-                            <span style="font-weight: 600; color: #1F2937;">${good} (${goodPct}%)</span>
-                        </div>
-                        <div style="background: #E5E7EB; border-radius: 6px; overflow: hidden; height: 24px;">
-                            <div style="background: #10B981; height: 100%; width: ${goodPct}%; transition: width 0.5s ease;"></div>
-                        </div>
-                    </div>
-
-                    <div style="margin-bottom: 16px;">
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px;">
-                            <span style="font-weight: 500; color: #F59E0B;">Uncertain</span>
-                            <span style="font-weight: 600; color: #1F2937;">${uncertain} (${uncertainPct}%)</span>
-                        </div>
-                        <div style="background: #E5E7EB; border-radius: 6px; overflow: hidden; height: 24px;">
-                            <div style="background: #F59E0B; height: 100%; width: ${uncertainPct}%; transition: width 0.5s ease;"></div>
-                        </div>
-                    </div>
-
-                    <div>
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px;">
-                            <span style="font-weight: 500; color: #EF4444;">Bad</span>
-                            <span style="font-weight: 600; color: #1F2937;">${bad} (${badPct}%)</span>
-                        </div>
-                        <div style="background: #E5E7EB; border-radius: 6px; overflow: hidden; height: 24px;">
-                            <div style="background: #EF4444; height: 100%; width: ${badPct}%; transition: width 0.5s ease;"></div>
-                        </div>
-                    </div>
-
-                    <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #E5E7EB; font-size: 12px; color: #6B7280;">
-                        Total Messages: ${total}
-                    </div>
-                `;
-
-                container.innerHTML = html;
-
-            } catch (error) {
-                console.error('Error fetching Kepware quality distribution:', error);
-                const container = document.getElementById('kepware-quality-dist');
-                if (container) {
-                    container.innerHTML = `
-                        <div style="text-align: center; color: #EF4444; font-size: 13px;">
-                            Error loading quality data
-                        </div>
-                    `;
-                }
-            }
-        }
-
-        // Fetch and display sample Kepware tags with live values
-        async function fetchKepwareSampleTags() {
-            try {
-                // Get recent Kepware messages to extract tag values
-                const response = await fetch('/api/modes/messages/recent?mode=kepware&protocol=mqtt&limit=50');
-                const data = await response.json();
-
-                const container = document.getElementById('kepware-sample-tags');
-                if (!container) return;
-
-                const messages = data.messages || [];
-
-                if (messages.length === 0) {
-                    container.innerHTML = `
-                        <div style="padding: 20px; text-align: center; color: #9CA3AF; font-size: 13px;">
-                            No recent messages. Start MQTT broker to see live tag values.
-                        </div>
-                    `;
-                    return;
-                }
-
-                // Extract unique tags with their latest values
-                const tagMap = new Map();
-                for (const msg of messages) {
-                    const payload = msg.payload || {};
-                    const sensorPath = payload.sensor_path;
-                    const value = payload.value;
-                    const quality = payload.quality || 'Good';
-                    const timestamp = msg.timestamp;
-                    const topic = msg.topic || '';
-                    const unit = payload.unit || '';
-
-                    if (sensorPath && value !== undefined) {
-                        const key = sensorPath;
-                        if (!tagMap.has(key) || tagMap.get(key).timestamp < timestamp) {
-                            // Extract tag path from topic (kepware/Channel/Device/Tag)
-                            const topicParts = topic.split('/');
-                            const tagPath = topicParts.length >= 4 ?
-                                `${topicParts[1]}.${topicParts[2]}.${topicParts[3]}` :
-                                sensorPath.replace('/', '.');
-
-                            tagMap.set(key, {
-                                tagPath,
-                                value: typeof value === 'number' ? value.toFixed(2) : value,
-                                unit,
-                                quality,
-                                timestamp,
-                                topic
-                            });
-                        }
-                    }
-                }
-
-                const tags = Array.from(tagMap.values()).slice(0, 10); // Show first 10 unique tags
-
-                if (tags.length === 0) {
-                    container.innerHTML = `
-                        <div style="padding: 20px; text-align: center; color: #9CA3AF; font-size: 13px;">
-                            No tag data available
-                        </div>
-                    `;
-                    return;
-                }
-
-                // Build tags table
-                let html = `
-                    <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 100px 140px; gap: 12px; padding: 10px 16px; background: #F3F4F6; font-weight: 600; font-size: 11px; color: #6B7280; text-transform: uppercase; border-bottom: 1px solid #E5E7EB;">
-                        <div>Tag Path</div>
-                        <div>Current Value</div>
-                        <div>Unit</div>
-                        <div>Quality</div>
-                        <div>Last Updated</div>
-                    </div>
-                `;
-
-                // Add tag rows
-                for (const tag of tags) {
-                    const timestamp = new Date(tag.timestamp * 1000);
-                    const timeStr = timestamp.toLocaleTimeString('en-US', { hour12: false });
-                    const secondsAgo = Math.floor((Date.now() / 1000) - tag.timestamp);
-                    const timeAgo = secondsAgo < 60 ? `${secondsAgo}s ago` :
-                                    secondsAgo < 3600 ? `${Math.floor(secondsAgo / 60)}m ago` :
-                                    `${Math.floor(secondsAgo / 3600)}h ago`;
-
-                    // Quality badge color
-                    const qualityColor = tag.quality === 'Good' || tag.quality === 'good' ? '#10B981' : '#EF4444';
-
-                    html += `
-                        <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 100px 140px; gap: 12px; padding: 10px 16px; font-size: 12px; border-bottom: 1px solid #F3F4F6;">
-                            <div style="font-family: monospace; font-size: 11px; color: #1F2937; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(tag.topic)}">
-                                ${escapeHtml(tag.tagPath)}
-                            </div>
-                            <div style="font-weight: 600; color: #1F2937;">${escapeHtml(tag.value)}</div>
-                            <div style="color: #6B7280;">${escapeHtml(tag.unit)}</div>
-                            <div>
-                                <span style="background: ${qualityColor}; color: white; padding: 2px 6px; border-radius: 3px; font-size: 10px; font-weight: 600;">
-                                    ${escapeHtml(tag.quality)}
-                                </span>
-                            </div>
-                            <div style="color: #6B7280; font-size: 11px;">
-                                ${timeStr}<br>
-                                <span style="color: #9CA3AF;">${timeAgo}</span>
-                            </div>
-                        </div>
-                    `;
-                }
-
-                container.innerHTML = html;
-
-            } catch (error) {
-                console.error('Error fetching Kepware sample tags:', error);
-                const container = document.getElementById('kepware-sample-tags');
-                if (container) {
-                    container.innerHTML = `
-                        <div style="padding: 20px; text-align: center; color: #EF4444; font-size: 13px;">
-                            Error loading sample tags
-                        </div>
-                    `;
-                }
-            }
         }
 
         // Update Sparkplug B panel
@@ -6885,553 +6500,34 @@ def get_scripts_html() -> str:
             const container = document.getElementById('sparkplug-nodes');
             if (!container) return;
 
-            // Display edge node status
-            const edgeNodeOnline = diagnostics.edge_node_online || false;
-            const edgeNodeState = diagnostics.edge_node_state || '🔴 OFFLINE';
-            const bdSeq = diagnostics.bd_seq || 0;
-            const msgSeq = diagnostics.msg_seq || 0;
-            const groupId = diagnostics.group_id || 'N/A';
-            const edgeNodeId = diagnostics.edge_node_id || 'N/A';
-            const birthTimeFormatted = diagnostics.edge_node_birth_time_formatted || 'Never';
-            const birthTimeAgo = diagnostics.edge_node_birth_time_ago || 'N/A';
-            const devices = diagnostics.devices || [];
-
-            // Build HTML for edge node display
-            let html = `
-                <div class="sparkplug-node" style="border-color: ${edgeNodeOnline ? '#10B981' : '#EF4444'};">
-                    <div style="margin-bottom: 16px;">
-                        <div style="font-size: 16px; font-weight: 600; color: #1F2937; margin-bottom: 8px;">
-                            Configuration
-                        </div>
-                        <div style="display: grid; grid-template-columns: 140px 1fr; gap: 8px; font-size: 13px;">
-                            <div style="color: #6B7280;">Group ID:</div>
-                            <div style="font-weight: 500;">${escapeHtml(groupId)}</div>
-                            <div style="color: #6B7280;">Edge Node ID:</div>
-                            <div style="font-weight: 500;">${escapeHtml(edgeNodeId)}</div>
-                            <div style="color: #6B7280;">Protobuf Encoding:</div>
-                            <div>${diagnostics.use_protobuf ? '✅ Enabled' : '⚪ Disabled (using JSON)'}</div>
-                        </div>
-                    </div>
-
-                    <div style="margin-bottom: 16px; padding: 12px; background: #F9FAFB; border-radius: 6px;">
-                        <div style="font-size: 16px; font-weight: 600; color: #1F2937; margin-bottom: 12px;">
-                            State Management
-                        </div>
-                        <div style="display: grid; grid-template-columns: 200px 1fr; gap: 8px; font-size: 13px;">
-                            <div style="color: #6B7280;">Birth/Death Sequence (bdSeq):</div>
-                            <div style="font-weight: 600; color: #8B5CF6;">${bdSeq}</div>
-                            <div style="color: #6B7280;">Message Sequence (seq):</div>
-                            <div style="font-weight: 600; color: #8B5CF6;">${msgSeq}</div>
-                            <div style="color: #6B7280;">Edge Node State:</div>
-                            <div style="font-weight: 600;">${edgeNodeState}</div>
-                            <div style="color: #6B7280;">Last NBIRTH:</div>
-                            <div style="font-weight: 500;">${birthTimeFormatted} <span style="color: #6B7280;">(${birthTimeAgo})</span></div>
-                        </div>
-                    </div>
-
-                    <div>
-                        <div style="font-size: 16px; font-weight: 600; color: #1F2937; margin-bottom: 12px;">
-                            Device Status
-                        </div>
-                        <div style="background: white; border: 1px solid #E5E7EB; border-radius: 6px; overflow: hidden;">
-                            <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 12px; padding: 10px 16px; background: #F3F4F6; font-weight: 600; font-size: 11px; color: #6B7280; text-transform: uppercase; border-bottom: 1px solid #E5E7EB;">
-                                <div>Device ID</div>
-                                <div>State</div>
-                                <div>Last DBIRTH</div>
-                                <div>Metrics</div>
-                            </div>
-            `;
-
-            // Add device rows
-            if (devices.length === 0) {
-                html += `
-                    <div style="padding: 20px; text-align: center; color: #9CA3AF; font-size: 13px;">
-                        No devices configured
-                    </div>
-                `;
-            } else {
-                for (const device of devices) {
-                    const deviceOnline = device.is_online || false;
-                    const deviceState = device.state || '🔴 Offline';
-                    const lastBirthSeq = device.last_birth_seq !== null && device.last_birth_seq !== undefined ? device.last_birth_seq : '-';
-
-                    html += `
-                        <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 12px; padding: 12px 16px; font-size: 13px; border-bottom: 1px solid #F3F4F6;">
-                            <div style="font-weight: 500; color: #1F2937;">${escapeHtml(device.device_id)}</div>
-                            <div style="font-weight: 500;">${deviceState}</div>
-                            <div style="color: #6B7280;">${lastBirthSeq}</div>
-                            <div style="color: #6B7280;">${device.metric_count || 0}</div>
-                        </div>
-                    `;
-                }
+            const nodes = diagnostics.edge_nodes_status || [];
+            if (nodes.length === 0) {
+                container.innerHTML = '<div style="text-align: center; padding: 40px; color: #6B7280;">No edge nodes configured</div>';
+                return;
             }
 
-            html += `
+            let html = '';
+            for (const node of nodes) {
+                const isOnline = node.online || false;
+                html += `
+                    <div class="sparkplug-node">
+                        <div class="sparkplug-node-header">
+                            <div class="sparkplug-node-name">${escapeHtml(node.name || 'Unknown')}</div>
+                            <span class="sparkplug-status-badge ${isOnline ? 'online' : 'offline'}">
+                                ${isOnline ? 'ONLINE' : 'OFFLINE'}
+                            </span>
+                        </div>
+                        <div style="font-size: 12px; color: #6B7280; margin-top: 8px;">
+                            Devices: ${node.device_count || 0} • bdSeq: ${node.bdSeq || 0}
                         </div>
                     </div>
-
-                    <!-- Quality Distribution Section -->
-                    <div style="margin-top: 24px;">
-                        <div style="font-size: 16px; font-weight: 600; color: #1F2937; margin-bottom: 12px;">
-                            Quality Distribution
-                        </div>
-                        <div id="sparkplug-quality-dist" style="background: white; border: 1px solid #E5E7EB; border-radius: 6px; padding: 16px;">
-                            Loading quality data...
-                        </div>
-                    </div>
-
-                    <!-- Message Type Distribution Section -->
-                    <div style="margin-top: 24px;">
-                        <div style="font-size: 16px; font-weight: 600; color: #1F2937; margin-bottom: 12px;">
-                            Message Type Distribution
-                        </div>
-                        <div id="sparkplug-message-types" style="background: white; border: 1px solid #E5E7EB; border-radius: 6px; overflow: hidden;">
-                            Loading message type data...
-                        </div>
-                    </div>
-
-                    <!-- Recent Messages Section -->
-                    <div style="margin-top: 24px;">
-                        <div style="font-size: 16px; font-weight: 600; color: #1F2937; margin-bottom: 12px;">
-                            Recent Messages
-                        </div>
-                        <div id="sparkplug-recent-messages" style="background: white; border: 1px solid #E5E7EB; border-radius: 6px; overflow: hidden;">
-                            <div style="padding: 20px; text-align: center; color: #9CA3AF; font-size: 13px;">
-                                Loading recent messages...
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-
+                `;
+            }
             container.innerHTML = html;
 
             // Update metrics
-            updateElement('sparkplug-births', devices.filter(d => d.last_birth_seq !== null).length);
-
-            // Fetch and display recent Sparkplug B messages, quality distribution, and message types
-            fetchSparkplugRecentMessages();
-            fetchSparkplugQualityDistribution();
-            fetchSparkplugMessageTypes();
-        }
-
-        // Fetch and display recent Sparkplug B messages
-        async function fetchSparkplugRecentMessages() {
-            try {
-                const response = await fetch('/api/modes/messages/recent?mode=sparkplug_b&limit=20');
-                const data = await response.json();
-
-                const container = document.getElementById('sparkplug-recent-messages');
-                if (!container) return;
-
-                const messages = data.messages || [];
-
-                if (messages.length === 0) {
-                    container.innerHTML = `
-                        <div style="padding: 20px; text-align: center; color: #9CA3AF; font-size: 13px;">
-                            No recent messages. Start MQTT broker to see messages.
-                        </div>
-                    `;
-                    return;
-                }
-
-                // Build messages table
-                let html = `
-                    <div style="display: grid; grid-template-columns: 160px 100px 1fr 80px; gap: 12px; padding: 10px 16px; background: #F3F4F6; font-weight: 600; font-size: 11px; color: #6B7280; text-transform: uppercase; border-bottom: 1px solid #E5E7EB;">
-                        <div>Time</div>
-                        <div>Type</div>
-                        <div>Topic</div>
-                        <div>Seq</div>
-                    </div>
-                `;
-
-                // Add message rows (show last 10)
-                for (const msg of messages.slice(0, 10)) {
-                    const timestamp = new Date(msg.timestamp * 1000);
-                    const timeStr = timestamp.toLocaleTimeString('en-US', { hour12: false });
-                    const messageType = msg.message_type || 'DDATA';
-                    const topic = msg.topic || '';
-                    const seq = msg.payload?.seq !== undefined ? msg.payload.seq : '-';
-
-                    // Color code message types
-                    let typeBgColor = '#3B82F6'; // Blue for DATA
-                    if (messageType === 'NBIRTH' || messageType === 'DBIRTH') {
-                        typeBgColor = '#10B981'; // Green for BIRTH
-                    } else if (messageType === 'NDEATH' || messageType === 'DDEATH') {
-                        typeBgColor = '#EF4444'; // Red for DEATH
-                    }
-
-                    // Shorten topic for display
-                    const topicParts = topic.split('/');
-                    const shortTopic = topicParts.length > 3 ?
-                        `.../${topicParts[topicParts.length-2]}/${topicParts[topicParts.length-1]}` :
-                        topic;
-
-                    html += `
-                        <div style="display: grid; grid-template-columns: 160px 100px 1fr 80px; gap: 12px; padding: 10px 16px; font-size: 12px; border-bottom: 1px solid #F3F4F6;">
-                            <div style="color: #6B7280;">${timeStr}</div>
-                            <div>
-                                <span style="background: ${typeBgColor}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;">
-                                    ${escapeHtml(messageType)}
-                                </span>
-                            </div>
-                            <div style="font-family: monospace; font-size: 11px; color: #1F2937; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(topic)}">
-                                ${escapeHtml(shortTopic)}
-                            </div>
-                            <div style="color: #6B7280; text-align: center;">${seq}</div>
-                        </div>
-                    `;
-                }
-
-                container.innerHTML = html;
-
-            } catch (error) {
-                console.error('Error fetching Sparkplug B messages:', error);
-                const container = document.getElementById('sparkplug-recent-messages');
-                if (container) {
-                    container.innerHTML = `
-                        <div style="padding: 20px; text-align: center; color: #EF4444; font-size: 13px;">
-                            Error loading messages
-                        </div>
-                    `;
-                }
-            }
-        }
-
-        // Fetch and display quality distribution for Sparkplug B
-        async function fetchSparkplugQualityDistribution() {
-            try {
-                const response = await fetch('/api/modes/sparkplug_b');
-                const data = await response.json();
-
-                const container = document.getElementById('sparkplug-quality-dist');
-                if (!container) return;
-
-                const metrics = data.metrics || {};
-                const qualityDist = metrics.quality_distribution || {};
-                const good = qualityDist.good || 0;
-                const bad = qualityDist.bad || 0;
-                const uncertain = qualityDist.uncertain || 0;
-                const total = good + bad + uncertain;
-
-                if (total === 0) {
-                    container.innerHTML = `
-                        <div style="text-align: center; color: #9CA3AF; font-size: 13px;">
-                            No quality data available. Start publishing messages to see distribution.
-                        </div>
-                    `;
-                    return;
-                }
-
-                const goodPct = ((good / total) * 100).toFixed(1);
-                const badPct = ((bad / total) * 100).toFixed(1);
-                const uncertainPct = ((uncertain / total) * 100).toFixed(1);
-
-                // Build quality distribution bars
-                let html = `
-                    <div style="margin-bottom: 16px;">
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px;">
-                            <span style="font-weight: 500; color: #10B981;">Good</span>
-                            <span style="font-weight: 600; color: #1F2937;">${good} (${goodPct}%)</span>
-                        </div>
-                        <div style="background: #E5E7EB; border-radius: 6px; overflow: hidden; height: 24px;">
-                            <div style="background: #10B981; height: 100%; width: ${goodPct}%; transition: width 0.5s ease;"></div>
-                        </div>
-                    </div>
-
-                    <div style="margin-bottom: 16px;">
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px;">
-                            <span style="font-weight: 500; color: #F59E0B;">Uncertain</span>
-                            <span style="font-weight: 600; color: #1F2937;">${uncertain} (${uncertainPct}%)</span>
-                        </div>
-                        <div style="background: #E5E7EB; border-radius: 6px; overflow: hidden; height: 24px;">
-                            <div style="background: #F59E0B; height: 100%; width: ${uncertainPct}%; transition: width 0.5s ease;"></div>
-                        </div>
-                    </div>
-
-                    <div>
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px;">
-                            <span style="font-weight: 500; color: #EF4444;">Bad</span>
-                            <span style="font-weight: 600; color: #1F2937;">${bad} (${badPct}%)</span>
-                        </div>
-                        <div style="background: #E5E7EB; border-radius: 6px; overflow: hidden; height: 24px;">
-                            <div style="background: #EF4444; height: 100%; width: ${badPct}%; transition: width 0.5s ease;"></div>
-                        </div>
-                    </div>
-
-                    <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #E5E7EB; font-size: 12px; color: #6B7280;">
-                        Total Messages: ${total}
-                    </div>
-                `;
-
-                container.innerHTML = html;
-
-            } catch (error) {
-                console.error('Error fetching Sparkplug B quality distribution:', error);
-                const container = document.getElementById('sparkplug-quality-dist');
-                if (container) {
-                    container.innerHTML = `
-                        <div style="text-align: center; color: #EF4444; font-size: 13px;">
-                            Error loading quality data
-                        </div>
-                    `;
-                }
-            }
-        }
-
-        // Fetch and display message type distribution for Sparkplug B
-        async function fetchSparkplugMessageTypes() {
-            try {
-                const response = await fetch('/api/modes/messages/recent?mode=sparkplug_b&limit=200');
-                const data = await response.json();
-
-                const container = document.getElementById('sparkplug-message-types');
-                if (!container) return;
-
-                const messages = data.messages || [];
-
-                if (messages.length === 0) {
-                    container.innerHTML = `
-                        <div style="padding: 20px; text-align: center; color: #9CA3AF; font-size: 13px;">
-                            No messages to analyze. Start MQTT broker to see message type distribution.
-                        </div>
-                    `;
-                    return;
-                }
-
-                // Count message types
-                const typeCounts = {
-                    'NBIRTH': 0,
-                    'DBIRTH': 0,
-                    'NDATA': 0,
-                    'DDATA': 0,
-                    'NDEATH': 0,
-                    'DDEATH': 0
-                };
-
-                for (const msg of messages) {
-                    const messageType = msg.message_type;
-                    if (messageType && typeCounts.hasOwnProperty(messageType)) {
-                        typeCounts[messageType]++;
-                    }
-                }
-
-                const total = Object.values(typeCounts).reduce((a, b) => a + b, 0);
-
-                if (total === 0) {
-                    container.innerHTML = `
-                        <div style="padding: 20px; text-align: center; color: #9CA3AF; font-size: 13px;">
-                            No message type data available
-                        </div>
-                    `;
-                    return;
-                }
-
-                // Build message type table
-                let html = `
-                    <div style="display: grid; grid-template-columns: 2fr 1fr 2fr; gap: 12px; padding: 10px 16px; background: #F3F4F6; font-weight: 600; font-size: 11px; color: #6B7280; text-transform: uppercase; border-bottom: 1px solid #E5E7EB;">
-                        <div>Message Type</div>
-                        <div>Count</div>
-                        <div>Percentage</div>
-                    </div>
-                `;
-
-                // Define message types with colors
-                const messageTypes = [
-                    { type: 'NBIRTH', label: 'NBIRTH (Node Birth)', color: '#10B981' },
-                    { type: 'DBIRTH', label: 'DBIRTH (Device Birth)', color: '#059669' },
-                    { type: 'NDATA', label: 'NDATA (Node Data)', color: '#3B82F6' },
-                    { type: 'DDATA', label: 'DDATA (Device Data)', color: '#2563EB' },
-                    { type: 'NDEATH', label: 'NDEATH (Node Death)', color: '#EF4444' },
-                    { type: 'DDEATH', label: 'DDEATH (Device Death)', color: '#DC2626' }
-                ];
-
-                for (const msgType of messageTypes) {
-                    const count = typeCounts[msgType.type];
-                    const pct = ((count / total) * 100).toFixed(1);
-
-                    html += `
-                        <div style="display: grid; grid-template-columns: 2fr 1fr 2fr; gap: 12px; padding: 10px 16px; font-size: 13px; border-bottom: 1px solid #F3F4F6;">
-                            <div>
-                                <span style="background: ${msgType.color}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; margin-right: 8px;">
-                                    ${msgType.type}
-                                </span>
-                                <span style="color: #6B7280; font-size: 11px;">${msgType.label.split('(')[1].replace(')', '')}</span>
-                            </div>
-                            <div style="font-weight: 600; color: #1F2937;">${count}</div>
-                            <div>
-                                <div style="display: flex; align-items: center; gap: 8px;">
-                                    <div style="flex: 1; background: #E5E7EB; border-radius: 4px; height: 16px; overflow: hidden;">
-                                        <div style="background: ${msgType.color}; height: 100%; width: ${pct}%; transition: width 0.5s ease;"></div>
-                                    </div>
-                                    <span style="font-weight: 600; color: #1F2937; min-width: 45px;">${pct}%</span>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                }
-
-                html += `
-                    <div style="padding: 12px 16px; background: #F9FAFB; font-size: 12px; color: #6B7280; border-top: 1px solid #E5E7EB;">
-                        <strong>Total Messages Analyzed:</strong> ${total} (from last ${messages.length} messages)
-                    </div>
-                `;
-
-                container.innerHTML = html;
-
-            } catch (error) {
-                console.error('Error fetching Sparkplug B message types:', error);
-                const container = document.getElementById('sparkplug-message-types');
-                if (container) {
-                    container.innerHTML = `
-                        <div style="padding: 20px; text-align: center; color: #EF4444; font-size: 13px;">
-                            Error loading message type data
-                        </div>
-                    `;
-                }
-            }
-        }
-
-        // Fetch and display OPC UA connected clients
-        async function fetchOPCUAClients() {
-            try {
-                const response = await fetch('/api/protocols/opcua/clients');
-                const data = await response.json();
-
-                const clients = data.clients || [];
-                const totalClients = data.total_clients || 0;
-
-                // Update client count badge
-                const countBadge = document.getElementById('opcua-client-count');
-                if (countBadge) {
-                    countBadge.textContent = `${totalClients} client${totalClients !== 1 ? 's' : ''}`;
-                }
-
-                const container = document.getElementById('opcua-clients-list');
-                if (!container) return;
-
-                if (clients.length === 0) {
-                    container.innerHTML = `
-                        <div style="padding: 20px; text-align: center; color: #9CA3AF; font-size: 13px;">
-                            No OPC UA clients currently connected
-                        </div>
-                    `;
-                    return;
-                }
-
-                // Build client table
-                let html = `
-                    <table style="width: 100%; border-collapse: collapse;">
-                        <thead style="background: #F9FAFB; border-bottom: 2px solid #E5E7EB;">
-                            <tr>
-                                <th style="padding: 10px 16px; text-align: left; font-size: 12px; font-weight: 600; color: #6B7280; text-transform: uppercase;">Client ID</th>
-                                <th style="padding: 10px 16px; text-align: left; font-size: 12px; font-weight: 600; color: #6B7280; text-transform: uppercase;">Endpoint</th>
-                                <th style="padding: 10px 16px; text-align: left; font-size: 12px; font-weight: 600; color: #6B7280; text-transform: uppercase;">Subscriptions</th>
-                                <th style="padding: 10px 16px; text-align: left; font-size: 12px; font-weight: 600; color: #6B7280; text-transform: uppercase;">Connected</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                `;
-
-                for (const client of clients) {
-                    const clientId = client.client_id || 'Unknown';
-                    const endpoint = client.endpoint || 'Unknown';
-                    const subscriptions = client.subscriptions || 0;
-                    const connectTime = client.connect_time || Date.now() / 1000;
-
-                    // Calculate time ago
-                    const now = Date.now() / 1000;
-                    const secondsAgo = Math.floor(now - connectTime);
-                    let timeAgo = '';
-                    if (secondsAgo < 60) {
-                        timeAgo = `${secondsAgo}s ago`;
-                    } else if (secondsAgo < 3600) {
-                        timeAgo = `${Math.floor(secondsAgo / 60)}m ago`;
-                    } else {
-                        timeAgo = `${Math.floor(secondsAgo / 3600)}h ago`;
-                    }
-
-                    html += `
-                        <tr style="border-bottom: 1px solid #E5E7EB;">
-                            <td style="padding: 12px 16px; font-size: 13px; font-weight: 600; color: #1F2937; font-family: 'Monaco', monospace;">${escapeHtml(clientId)}</td>
-                            <td style="padding: 12px 16px; font-size: 12px; color: #6B7280; font-family: 'Monaco', monospace;">${escapeHtml(endpoint)}</td>
-                            <td style="padding: 12px 16px; font-size: 13px; color: #1F2937; text-align: left;">
-                                <span style="background: #DBEAFE; color: #1E40AF; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 11px;">${subscriptions}</span>
-                            </td>
-                            <td style="padding: 12px 16px; font-size: 12px; color: #6B7280;">${timeAgo}</td>
-                        </tr>
-                    `;
-                }
-
-                html += `
-                        </tbody>
-                    </table>
-                `;
-
-                container.innerHTML = html;
-
-            } catch (error) {
-                console.error('Error fetching OPC UA clients:', error);
-                const container = document.getElementById('opcua-clients-list');
-                if (container) {
-                    container.innerHTML = `
-                        <div style="padding: 20px; text-align: center; color: #EF4444; font-size: 13px;">
-                            Error loading client information
-                        </div>
-                    `;
-                }
-            }
-        }
-
-        // Fetch and display MQTT subscribers
-        async function fetchMQTTSubscribers() {
-            try {
-                const response = await fetch('/api/protocols/mqtt/subscribers');
-                const data = await response.json();
-
-                const subscribers = data.subscribers || [];
-                const totalSubscribers = data.total_subscribers || 0;
-                const note = data.note || '';
-
-                // Update subscriber count badge
-                const countBadge = document.getElementById('mqtt-subscriber-count');
-                if (countBadge) {
-                    countBadge.textContent = subscribers.length > 0 ? `${totalSubscribers} subscriber${totalSubscribers !== 1 ? 's' : ''}` : 'N/A';
-                }
-
-                const container = document.getElementById('mqtt-subscribers-list');
-                if (!container) return;
-
-                // MQTT protocol limitation message
-                container.innerHTML = `
-                    <div style="padding: 20px;">
-                        <div style="text-align: center; color: #9CA3AF; font-size: 13px; margin-bottom: 12px;">
-                            Subscriber tracking not available
-                        </div>
-                        <div style="background: #FEF3C7; border: 1px solid #F59E0B; border-radius: 6px; padding: 12px; font-size: 12px; color: #92400E;">
-                            <strong style="color: #78350F;">Protocol Limitation:</strong><br>
-                            MQTT publishers do not receive subscriber information from brokers. To track subscribers, you would need:<br><br>
-                            <ul style="margin: 8px 0 0 20px; padding: 0;">
-                                <li>Mosquitto: Subscribe to <code style="background: rgba(0,0,0,0.1); padding: 2px 4px; border-radius: 3px;">$SYS/broker/clients/connected</code></li>
-                                <li>HiveMQ: Use REST API <code style="background: rgba(0,0,0,0.1); padding: 2px 4px; border-radius: 3px;">/api/v1/mqtt/clients</code></li>
-                                <li>AWS IoT: CloudWatch metrics</li>
-                                <li>Azure IoT Hub: Device Registry API</li>
-                            </ul>
-                        </div>
-                    </div>
-                `;
-
-            } catch (error) {
-                console.error('Error fetching MQTT subscribers:', error);
-                const container = document.getElementById('mqtt-subscribers-list');
-                if (container) {
-                    container.innerHTML = `
-                        <div style="padding: 20px; text-align: center; color: #EF4444; font-size: 13px;">
-                            Error loading subscriber information
-                        </div>
-                    `;
-                }
-            }
+            updateElement('sparkplug-nodes-online', diagnostics.edge_nodes || 0);
+            updateElement('sparkplug-bdseq', diagnostics.bdSeq || 0);
         }
 
         // Update Honeywell panel
@@ -7498,8 +6594,6 @@ def get_scripts_html() -> str:
         let inspectorRunning = false;
         let inspectorMessages = [];
         const MAX_INSPECTOR_MESSAGES = 100;
-        let inspectorInterval = null;
-        let inspectorSensorList = [];
 
         function toggleMessageInspector() {
             inspectorRunning = !inspectorRunning;
@@ -7511,60 +6605,12 @@ def get_scripts_html() -> str:
 
             if (!inspectorRunning) {
                 console.log('Message inspector stopped');
-                if (inspectorInterval) {
-                    clearInterval(inspectorInterval);
-                    inspectorInterval = null;
-                }
             } else {
                 console.log('Message inspector started');
                 const body = document.getElementById('message-inspector-body');
                 if (body && inspectorMessages.length === 0) {
                     body.innerHTML = '<div style="text-align: center; padding: 40px; color: #6B7280;">Listening for vendor mode messages...</div>';
                 }
-                // Start polling for messages
-                if (!inspectorInterval) {
-                    fetchSensorList().then(() => {
-                        inspectorInterval = setInterval(pollVendorMessages, 2000); // Poll every 2 seconds
-                        pollVendorMessages(); // Immediate first poll
-                    });
-                }
-            }
-        }
-
-        async function fetchSensorList() {
-            // Use predefined sensor list
-            const sampleSensors = [
-                { industry: 'mining', sensor: 'crusher_1_motor_power' },
-                { industry: 'mining', sensor: 'conveyor_belt_1_speed' },
-                { industry: 'oil_gas', sensor: 'compressor_1_motor_power' },
-                { industry: 'oil_gas', sensor: 'pipeline_1_flow' },
-                { industry: 'utilities', sensor: 'grid_main_frequency' },
-                { industry: 'manufacturing', sensor: 'robot_1_joint_1_torque' },
-            ];
-            inspectorSensorList = sampleSensors;
-        }
-
-        async function pollVendorMessages() {
-            if (!inspectorRunning) return;
-
-            try {
-                // Fetch recent real messages from the backend
-                const response = await fetch('/api/modes/messages/recent?limit=50');
-                if (!response.ok) {
-                    console.error('Failed to fetch messages:', response.status);
-                    return;
-                }
-
-                const data = await response.json();
-                console.log(`Fetched ${data.count} recent messages`);
-
-                // Process each message
-                for (const message of data.messages) {
-                    addMessageToInspector(message);
-                }
-
-            } catch (error) {
-                console.error('Error polling vendor messages:', error);
             }
         }
 
@@ -7577,35 +6623,11 @@ def get_scripts_html() -> str:
         }
 
         function addMessageToInspector(message) {
-            console.log('addMessageToInspector called:', message);
+            if (!inspectorRunning) return;
 
-            if (!inspectorRunning) {
-                console.log('Inspector not running, skipping message');
-                return;
-            }
-
-            // Apply protocol filter
-            const protocolFilter = document.getElementById('inspector-protocol-filter')?.value;
-            if (protocolFilter && message.protocol !== protocolFilter) {
-                console.log('Message filtered out by protocol');
-                return;
-            }
-
-            // Apply mode filter
-            const modeFilter = document.getElementById('inspector-mode-filter')?.value;
-            console.log('Mode filter value:', modeFilter, 'Message mode:', message.mode);
-
-            if (modeFilter && message.mode !== modeFilter) {
-                console.log('Message filtered out by mode');
-                return;
-            }
-
-            // Apply industry filter
-            const industryFilter = document.getElementById('inspector-industry-filter')?.value;
-            if (industryFilter && message.industry !== industryFilter) {
-                console.log('Message filtered out by industry');
-                return;
-            }
+            // Apply filter
+            const filter = document.getElementById('inspector-mode-filter')?.value;
+            if (filter && message.mode !== filter) return;
 
             // Add to array (FIFO)
             inspectorMessages.unshift(message);
@@ -7613,54 +6635,19 @@ def get_scripts_html() -> str:
                 inspectorMessages.pop();
             }
 
-            console.log('Inspector messages count:', inspectorMessages.length);
-
             // Update UI
             const body = document.getElementById('message-inspector-body');
-            if (!body) {
-                console.error('Message inspector body element not found!');
-                return;
-            }
+            if (!body) return;
 
             let html = '';
             for (const msg of inspectorMessages) {
-                const timestamp = new Date(msg.timestamp * 1000).toLocaleTimeString();
+                const timestamp = new Date(msg.timestamp).toLocaleTimeString();
                 const payloadStr = JSON.stringify(msg.payload, null, 2);
-                const protocol = msg.protocol || 'unknown';
-                const industry = msg.industry || 'N/A';
-                const messageType = msg.message_type || null;
-
-                // Protocol color coding
-                let protocolClass = 'message-protocol';
-                if (protocol === 'mqtt') protocolClass += ' protocol-mqtt';
-                else if (protocol === 'opcua') protocolClass += ' protocol-opcua';
-                else if (protocol === 'modbus') protocolClass += ' protocol-modbus';
-
-                // Industry badge styling
-                const industryBadge = industry !== 'N/A' ?
-                    `<span class="message-industry" style="background: #F3F4F6; color: #374151; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">${escapeHtml(industry.toUpperCase())}</span>` : '';
-
-                // Sparkplug B message type badge
-                let messageTypeBadge = '';
-                if (messageType) {
-                    let bgColor = '#8B5CF6'; // Default purple
-                    if (messageType === 'NBIRTH' || messageType === 'DBIRTH') {
-                        bgColor = '#10B981'; // Green for BIRTH
-                    } else if (messageType === 'NDEATH' || messageType === 'DDEATH') {
-                        bgColor = '#EF4444'; // Red for DEATH
-                    } else if (messageType === 'NDATA' || messageType === 'DDATA') {
-                        bgColor = '#3B82F6'; // Blue for DATA
-                    }
-                    messageTypeBadge = `<span style="background: ${bgColor}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">${escapeHtml(messageType)}</span>`;
-                }
 
                 html += `
                     <div class="message-item">
                         <div class="message-header">
                             <span class="message-timestamp">${timestamp}</span>
-                            <span class="${protocolClass}">${escapeHtml(protocol.toUpperCase())}</span>
-                            ${industryBadge}
-                            ${messageTypeBadge}
                             <span class="message-topic">${escapeHtml(msg.topic || 'N/A')}</span>
                             <span class="message-mode">${escapeHtml(msg.mode || 'unknown')}</span>
                         </div>
@@ -7669,7 +6656,6 @@ def get_scripts_html() -> str:
                 `;
             }
             body.innerHTML = html;
-            console.log('Updated inspector UI with', inspectorMessages.length, 'messages');
         }
 
         // Syntax highlighting for JSON
@@ -7720,232 +6706,6 @@ def get_scripts_html() -> str:
                 refreshVendorModes();
             }, 1000);
         }
-
-        // Periodic refresh of protocol clients (every 10 seconds)
-        setInterval(() => {
-            if (document.getElementById('content-overview')?.classList.contains('active')) {
-                fetchOPCUAClients();
-                fetchMQTTSubscribers();
-            }
-        }, 10000);
-
-        // Initial load of protocol clients
-        if (document.getElementById('opcua-clients-section')) {
-            setTimeout(() => {
-                fetchOPCUAClients();
-                fetchMQTTSubscribers();
-            }, 1500);
-        }
-
-        // ==================== CONNECTION INFO JAVASCRIPT ====================
-
-        // Load connection information
-        async function loadConnectionInfo() {
-            try {
-                const response = await fetch('/api/connection/endpoints');
-                const data = await response.json();
-
-                // Render protocols
-                renderProtocols(data.protocols);
-
-                // Render vendor modes
-                renderVendorModes(data.vendor_modes);
-
-                // Render PLCs
-                renderPLCs(data.plc_controllers);
-
-                // Render examples
-                renderConnectionExamples(data.connection_examples);
-
-            } catch (error) {
-                console.error('Error loading connection info:', error);
-            }
-        }
-
-        function renderProtocols(protocols) {
-            const container = document.getElementById('connection-protocols');
-            container.innerHTML = '';
-
-            for (const [name, info] of Object.entries(protocols)) {
-                const card = document.createElement('div');
-                card.style.cssText = 'background: rgba(255,255,255,0.05); border-radius: 8px; padding: 16px; border: 1px solid rgba(255,255,255,0.1);';
-
-                let details = '';
-                if (name === 'opcua') {
-                    // Build vendor-specific endpoints table
-                    let vendorEndpoints = '';
-                    if (info.vendor_endpoints) {
-                        vendorEndpoints = `
-                            <div style="margin-top: 12px;">
-                                <strong style="color: #3B82F6;">Vendor-Specific Endpoints:</strong>
-                                <div style="margin-top: 8px; background: rgba(0,0,0,0.2); border-radius: 6px; padding: 12px;">
-                                    ${Object.entries(info.vendor_endpoints).map(([mode, ep]) => `
-                                        <div style="margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.1);">
-                                            <div style="font-weight: 600; color: ${mode === 'generic' ? '#10B981' : mode === 'kepware' ? '#F59E0B' : '#8B5CF6'}; text-transform: capitalize; margin-bottom: 4px;">${mode.replace('_', ' ')}</div>
-                                            <div style="font-size: 11px;"><strong>Port:</strong> ${ep.port}</div>
-                                            <div style="font-size: 11px;"><strong>Nodes:</strong> ${ep.node_count}</div>
-                                            ${ep.note ? `<div style="font-size: 10px; color: rgba(255,255,255,0.5); margin-top: 4px; font-style: italic;">${ep.note}</div>` : ''}
-                                        </div>
-                                    `).join('')}
-                                </div>
-                            </div>
-                        `;
-                    }
-
-                    details = `
-                        <div style="margin-top: 8px; font-size: 13px;">
-                            <div><strong>Main Endpoint:</strong> <code style="background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px;">${info.endpoint}</code></div>
-                            <div style="margin-top: 4px;"><strong>Namespace:</strong> ${info.namespace}</div>
-                            <div style="margin-top: 4px;"><strong>Security:</strong> ${info.security}</div>
-                            ${vendorEndpoints}
-                        </div>
-                    `;
-                } else if (name === 'mqtt') {
-                    details = `
-                        <div style="margin-top: 8px; font-size: 13px;">
-                            <div><strong>Broker:</strong> <code style="background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px;">${info.broker}:${info.port}</code></div>
-                            <div style="margin-top: 4px;"><strong>TLS:</strong> ${info.tls ? 'Enabled' : 'Disabled'}</div>
-                            <div style="margin-top: 4px;"><strong>Auth Required:</strong> ${info.auth_required ? 'Yes' : 'No'}</div>
-                        </div>
-                    `;
-                } else if (name === 'modbus') {
-                    details = `
-                        <div style="margin-top: 8px; font-size: 13px;">
-                            <div><strong>Host:</strong> <code style="background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px;">${info.host}:${info.port}</code></div>
-                            <div style="margin-top: 4px;"><strong>Protocol:</strong> ${info.protocol}</div>
-                            <div style="margin-top: 4px;"><strong>Slave ID:</strong> ${info.slave_id}</div>
-                        </div>
-                    `;
-                } else if (name === 'websocket') {
-                    details = `
-                        <div style="margin-top: 8px; font-size: 13px;">
-                            <div><strong>URL:</strong> <code style="background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px;">${info.url}</code></div>
-                            <div style="margin-top: 4px;"><strong>Update Frequency:</strong> ${info.update_frequency}</div>
-                        </div>
-                    `;
-                }
-
-                card.innerHTML = `
-                    <div style="font-weight: 600; font-size: 14px; color: #10B981; text-transform: uppercase; margin-bottom: 4px;">${name}</div>
-                    <div style="font-size: 12px; color: rgba(255,255,255,0.6); margin-bottom: 8px;">${info.description}</div>
-                    ${details}
-                `;
-
-                container.appendChild(card);
-            }
-        }
-
-        function renderVendorModes(vendorModes) {
-            const container = document.getElementById('connection-vendor-modes');
-            container.innerHTML = '';
-
-            for (const [name, info] of Object.entries(vendorModes)) {
-                const card = document.createElement('div');
-                card.style.cssText = 'background: rgba(255,255,255,0.05); border-radius: 8px; padding: 16px; border: 1px solid rgba(255,255,255,0.1);';
-
-                card.innerHTML = `
-                    <div style="font-weight: 600; font-size: 14px; color: #3B82F6; margin-bottom: 4px;">${info.display_name}</div>
-                    <div style="font-size: 12px; color: rgba(255,255,255,0.6); margin-bottom: 12px;">${info.description}</div>
-
-                    <div style="margin-bottom: 8px;">
-                        <div style="font-size: 11px; color: rgba(255,255,255,0.5); margin-bottom: 4px;">OPC-UA Pattern:</div>
-                        <code style="display: block; background: rgba(0,0,0,0.3); padding: 6px 8px; border-radius: 4px; font-size: 11px; word-break: break-all;">${info.opcua_pattern}</code>
-                    </div>
-
-                    <div style="margin-bottom: 8px;">
-                        <div style="font-size: 11px; color: rgba(255,255,255,0.5); margin-bottom: 4px;">MQTT Pattern:</div>
-                        <code style="display: block; background: rgba(0,0,0,0.3); padding: 6px 8px; border-radius: 4px; font-size: 11px; word-break: break-all;">${info.mqtt_pattern}</code>
-                    </div>
-
-                    <div style="margin-bottom: 8px;">
-                        <div style="font-size: 11px; color: rgba(255,255,255,0.5); margin-bottom: 4px;">Example OPC-UA:</div>
-                        <code style="display: block; background: rgba(16, 185, 129, 0.1); padding: 6px 8px; border-radius: 4px; font-size: 10px; word-break: break-all; color: #10B981;">${info.example_opcua}</code>
-                    </div>
-
-                    <div>
-                        <div style="font-size: 11px; color: rgba(255,255,255,0.5); margin-bottom: 4px;">Example MQTT:</div>
-                        <code style="display: block; background: rgba(16, 185, 129, 0.1); padding: 6px 8px; border-radius: 4px; font-size: 10px; word-break: break-all; color: #10B981;">${info.example_mqtt}</code>
-                    </div>
-                `;
-
-                container.appendChild(card);
-            }
-        }
-
-        function renderPLCs(plcInfo) {
-            const container = document.getElementById('connection-plcs');
-            container.innerHTML = '';
-
-            // Add summary card first
-            const summaryCard = document.createElement('div');
-            summaryCard.style.cssText = 'background: rgba(139, 92, 246, 0.1); border-radius: 8px; padding: 16px; border: 1px solid rgba(139, 92, 246, 0.3); grid-column: 1 / -1;';
-            summaryCard.innerHTML = `
-                <div style="font-weight: 600; font-size: 14px; color: #8B5CF6; margin-bottom: 8px;">PLC Overview</div>
-                <div style="font-size: 13px;">${plcInfo.description}</div>
-                <div style="margin-top: 8px; display: flex; gap: 16px;">
-                    <div><strong>Total PLCs:</strong> ${plcInfo.total_plcs}</div>
-                    <div><strong>Vendors:</strong> ${plcInfo.total_vendors}</div>
-                </div>
-            `;
-            container.appendChild(summaryCard);
-
-            // Add vendor cards
-            plcInfo.vendors.forEach(vendor => {
-                const card = document.createElement('div');
-                card.style.cssText = 'background: rgba(255,255,255,0.05); border-radius: 8px; padding: 12px; border: 1px solid rgba(255,255,255,0.1);';
-
-                card.innerHTML = `
-                    <div style="font-weight: 600; font-size: 13px; color: #8B5CF6; margin-bottom: 6px;">${vendor.name}</div>
-                    <div style="font-size: 11px; color: rgba(255,255,255,0.6); margin-bottom: 6px;">PLCs: ${vendor.plc_count}</div>
-                    <div style="font-size: 11px;">
-                        <div style="color: rgba(255,255,255,0.5); margin-bottom: 4px;">Channels:</div>
-                        ${vendor.channels.map(ch => `<div style="padding: 2px 6px; background: rgba(0,0,0,0.3); border-radius: 4px; margin: 2px 0; font-size: 10px;"><code>${ch}</code></div>`).join('')}
-                    </div>
-                `;
-
-                container.appendChild(card);
-            });
-        }
-
-        function renderConnectionExamples(examples) {
-            const container = document.getElementById('connection-examples');
-            container.innerHTML = '';
-
-            for (const [name, info] of Object.entries(examples)) {
-                const card = document.createElement('div');
-                card.style.cssText = 'background: rgba(255,255,255,0.05); border-radius: 8px; padding: 16px; border: 1px solid rgba(255,255,255,0.1);';
-
-                card.innerHTML = `
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                        <div>
-                            <div style="font-weight: 600; font-size: 14px; color: #10B981; margin-bottom: 4px;">${name.replace(/_/g, ' ').toUpperCase()}</div>
-                            <div style="font-size: 12px; color: rgba(255,255,255,0.6);">${info.description}</div>
-                            ${info.library ? `<div style="font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 4px;">Library: ${info.library} | Install: <code style="background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px;">${info.install}</code></div>` : ''}
-                        </div>
-                        <button onclick="copyToClipboard(\`${info.code.replace(/`/g, '\\`')}\`, this)" style="padding: 8px 16px; background: #10B981; color: white; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; white-space: nowrap;">Copy Code</button>
-                    </div>
-                    <pre style="background: #1a1a1a; padding: 12px; border-radius: 6px; overflow-x: auto; margin: 0;"><code style="font-size: 11px; color: #e5e7eb; font-family: 'Courier New', monospace;">${info.code}</code></pre>
-                `;
-
-                container.appendChild(card);
-            }
-        }
-
-        function copyToClipboard(text, button) {
-            navigator.clipboard.writeText(text).then(() => {
-                const originalText = button.textContent;
-                button.textContent = 'Copied!';
-                button.style.background = '#059669';
-                setTimeout(() => {
-                    button.textContent = originalText;
-                    button.style.background = '#10B981';
-                }, 2000);
-            }).catch(err => {
-                console.error('Failed to copy:', err);
-            });
-        }
-
-        // ==================== END CONNECTION INFO JAVASCRIPT ====================
 
         // ==================== END VENDOR MODE JAVASCRIPT ====================
 

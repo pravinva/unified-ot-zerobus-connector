@@ -1807,3 +1807,78 @@ class APIHandlers:
                 "message": str(e),
                 "detail": error_detail
             }, status=500)
+
+    async def handle_get_opcua_clients(self, request: web.Request) -> web.Response:
+        """Get list of connected OPC UA clients.
+
+        GET /api/protocols/opcua/clients
+
+        Returns:
+            {
+                "clients": [
+                    {
+                        "client_id": "Client-1234",
+                        "endpoint": "opc.tcp://192.168.1.100:49320",
+                        "connect_time": 1234567890.123,
+                        "subscriptions": 5
+                    }
+                ],
+                "total_clients": 1
+            }
+        """
+        try:
+            opcua_sim = self.manager.simulators.get("opcua")
+            clients = []
+
+            if opcua_sim and hasattr(opcua_sim, 'get_connected_clients'):
+                clients = opcua_sim.get_connected_clients()
+
+            return web.json_response({
+                "clients": clients,
+                "total_clients": len(clients)
+            })
+
+        except Exception as e:
+            logger.error(f"Error getting OPC UA clients: {e}", exc_info=True)
+            return web.json_response({
+                "error": str(e),
+                "clients": [],
+                "total_clients": 0
+            }, status=500)
+
+    async def handle_get_mqtt_subscribers(self, request: web.Request) -> web.Response:
+        """Get list of MQTT subscribers (if broker provides this info).
+
+        GET /api/protocols/mqtt/subscribers
+
+        Note: This endpoint returns an empty list because the MQTT simulator
+        is a client/publisher, not a broker. Subscriber tracking would require
+        broker-side APIs which are not available through standard MQTT protocol.
+
+        Returns:
+            {
+                "subscribers": [],
+                "total_subscribers": 0,
+                "note": "Subscriber tracking not available from MQTT client"
+            }
+        """
+        try:
+            mqtt_sim = self.manager.simulators.get("mqtt")
+            subscribers = []
+
+            if mqtt_sim and hasattr(mqtt_sim, 'get_connected_subscribers'):
+                subscribers = mqtt_sim.get_connected_subscribers()
+
+            return web.json_response({
+                "subscribers": subscribers,
+                "total_subscribers": len(subscribers),
+                "note": "MQTT client does not have access to broker subscriber information"
+            })
+
+        except Exception as e:
+            logger.error(f"Error getting MQTT subscribers: {e}", exc_info=True)
+            return web.json_response({
+                "error": str(e),
+                "subscribers": [],
+                "total_subscribers": 0
+            }, status=500)

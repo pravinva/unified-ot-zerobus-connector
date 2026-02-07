@@ -86,7 +86,7 @@ class SimulatorManager:
             if not self.config.modbus.enabled:
                 logger.warning("Modbus requested but disabled in config")
             else:
-                modbus_sim = ModbusSimulator(self.config.modbus)
+                modbus_sim = ModbusSimulator(self.config.modbus, simulator_manager=self)
                 self.simulators["modbus"] = modbus_sim
 
                 # Start TCP and/or RTU based on config

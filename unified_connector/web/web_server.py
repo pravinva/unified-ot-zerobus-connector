@@ -136,6 +136,7 @@ class WebServer:
             # Monitoring
             web.get('/api/metrics', self.get_metrics),
             web.get('/api/status', self.get_status),
+            web.get('/api/diagnostics/pipeline', self.get_pipeline_diagnostics),
 
             # Health
             web.get('/health', self.health_check),
@@ -697,6 +698,21 @@ class WebServer:
             return web.json_response({'status': 'error', 'message': str(e)}, status=500)
 
     @require_permission(Permission.READ)
+    async def get_pipeline_diagnostics(self, request: web.Request) -> web.Response:
+        """Get message transformation pipeline diagnostics.
+
+        GET /api/diagnostics/pipeline
+
+        Returns sample messages at each transformation stage.
+        """
+        try:
+            diagnostics = self.bridge.get_pipeline_diagnostics()
+            return web.json_response(diagnostics)
+        except Exception as e:
+            logger.error(f"Failed to get pipeline diagnostics: {e}", exc_info=True)
+            return web.json_response({'status': 'error', 'message': str(e)}, status=500)
+
+    @require_permission(Permission.READ)
     async def get_status(self, request: web.Request) -> web.Response:
         """Get connector status."""
         try:
@@ -1051,6 +1067,32 @@ class WebServer:
             <button id="btnRefreshMetrics" class="btn btn-secondary" type="button">Refresh</button>
           </div>
           <div id="metricsKVs" class="kvs"></div>
+        </div>
+      </div>
+
+      <div class="card collapsible" style="grid-column: 1 / -1">
+        <div class="card-header">
+          <h2>Pipeline Diagnostics</h2>
+          <div class="hint">Message transformation pipeline: Raw Protocol → Vendor Detection → ISA-95 → ZeroBus</div>
+          <button class="iconbtn" type="button" data-toggle="collapse" data-target="#pipelineBody" aria-label="Toggle Pipeline">▾</button>
+        </div>
+        <div id="pipelineBody" class="card-body" style="display:none">
+          <div class="row" style="justify-content: space-between; margin-bottom: 16px">
+            <div class="row" style="gap: 12px">
+              <div id="vendorKepware" class="pill secondary"><strong>Kepware: 0</strong></div>
+              <div id="vendorSparkplug" class="pill secondary"><strong>Sparkplug B: 0</strong></div>
+              <div id="vendorHoneywell" class="pill secondary"><strong>Honeywell: 0</strong></div>
+              <div id="vendorGeneric" class="pill secondary"><strong>Generic: 0</strong></div>
+            </div>
+            <button id="btnRefreshPipeline" class="btn btn-secondary" type="button">Refresh</button>
+          </div>
+
+          <div id="pipelineFlowContainer">
+            <!-- Per-vendor pipelines will be dynamically rendered here -->
+          </div>
+
+          <div class="section-title" style="margin-top: 24px">Normalization Status</div>
+          <div id="pipelineNormStatus" class="muted">ISA-95 normalization: checking...</div>
         </div>
       </div>
     </div>

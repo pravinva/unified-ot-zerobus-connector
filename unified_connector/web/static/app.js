@@ -174,6 +174,222 @@ async function refreshMetrics() {
   setKVs("#metricsKVs", metrics);
 }
 
+async function refreshPipeline() {
+  try {
+    const data = await apiFetch("/api/diagnostics/pipeline");
+
+    // Update vendor format badges
+    const vendorFormats = data.vendor_format_summary || {};
+    $("#vendorKepware").innerHTML = `<strong>Kepware: ${vendorFormats.kepware || 0}</strong>`;
+    $("#vendorSparkplug").innerHTML = `<strong>Sparkplug B: ${vendorFormats.sparkplug_b || 0}</strong>`;
+    $("#vendorHoneywell").innerHTML = `<strong>Honeywell: ${vendorFormats.honeywell || 0}</strong>`;
+    $("#vendorGeneric").innerHTML = `<strong>Generic: ${vendorFormats.generic || 0}</strong>`;
+
+    // Update normalization status
+    const normEnabled = data.normalization_enabled || false;
+    $("#pipelineNormStatus").textContent = `ISA-95 normalization: ${normEnabled ? 'ENABLED' : 'DISABLED'}`;
+    $("#pipelineNormStatus").style.color = normEnabled ? 'var(--good)' : 'var(--warning)';
+
+    // Get pipeline container
+    const pipelineContainer = document.getElementById('pipelineFlowContainer');
+    if (!pipelineContainer) return;
+
+    // Clear existing pipeline
+    pipelineContainer.innerHTML = '';
+
+    // Render per-vendor pipelines
+    const vendorPipelines = data.vendor_pipelines || {};
+
+    // Vendor display names
+    const vendorNames = {
+      kepware: 'Kepware',
+      sparkplug_b: 'Sparkplug B',
+      honeywell: 'Honeywell',
+      opcua: 'OPC UA',
+      modbus: 'Modbus',
+      generic: 'Generic',
+      unknown: 'Unknown'
+    };
+
+    // Only show vendors with records
+    for (const [vendorKey, vendorData] of Object.entries(vendorPipelines)) {
+      if (vendorData.record_count === 0 && vendorKey !== 'kepware' && vendorKey !== 'honeywell' && vendorKey !== 'generic') {
+        continue; // Skip vendors with no data (except main ones)
+      }
+
+      renderVendorPipeline(vendorKey, vendorNames[vendorKey] || vendorKey, vendorData);
+    }
+  } catch (e) {
+    console.error("Failed to refresh pipeline diagnostics:", e);
+    toast("Failed to load pipeline diagnostics", "bad");
+  }
+}
+
+function renderVendorPipeline(vendorKey, vendorName, vendorData) {
+  const pipelineContainer = document.getElementById('pipelineFlowContainer');
+  if (!pipelineContainer) return;
+
+  const stages = vendorData.pipeline_stages || [];
+  const recordCount = vendorData.record_count || 0;
+
+  // Create vendor section
+  const vendorSection = document.createElement('div');
+  vendorSection.className = 'vendor-pipeline-section';
+  vendorSection.style.marginBottom = '24px';
+
+  // Vendor header
+  const vendorHeader = document.createElement('div');
+  vendorHeader.style.cssText = 'display: flex; align-items: center; gap: 12px; margin-bottom: 12px; padding: 8px 12px; background: var(--bg-secondary); border-radius: 6px;';
+  vendorHeader.innerHTML = `
+    <span style="font-size: 14px; font-weight: 700; color: var(--text);">${escapeHtml(vendorName)}</span>
+    <span style="font-size: 12px; color: var(--muted);">${recordCount} records</span>
+  `;
+  vendorSection.appendChild(vendorHeader);
+
+  // Pipeline flow container for this vendor
+  const pipelineFlow = document.createElement('div');
+  pipelineFlow.className = 'pipeline-flow';
+  pipelineFlow.style.cssText = 'display: flex; align-items: flex-start; gap: 12px; overflow-x: auto;';
+
+  // Render each stage
+  for (let i = 0; i < stages.length; i++) {
+    const stage = stages[i];
+
+    // Create stage element
+    const stageEl = document.createElement('div');
+    stageEl.className = 'pipeline-stage';
+    stageEl.style.cssText = 'flex: 1; min-width: 240px; background: white; border: 1px solid var(--border); border-radius: 8px; padding: 12px;';
+
+    // Stage header
+    const stageHeader = document.createElement('div');
+    stageHeader.className = 'pipeline-stage-header';
+    stageHeader.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;';
+
+    const stageTitle = document.createElement('div');
+    stageTitle.className = 'pipeline-stage-title';
+    stageTitle.style.cssText = 'font-size: 13px; font-weight: 700; color: var(--text);';
+    stageTitle.textContent = `${i + 1}. ${stage.name || stage.stage}`;
+
+    const stageCount = document.createElement('div');
+    stageCount.className = 'pipeline-stage-count';
+    stageCount.style.cssText = 'font-size: 11px; color: var(--muted); font-weight: 600;';
+    stageCount.textContent = `${stage.sample_count || 0} samples`;
+
+    stageHeader.appendChild(stageTitle);
+    stageHeader.appendChild(stageCount);
+    stageEl.appendChild(stageHeader);
+
+    // Stage description
+    const stageDesc = document.createElement('div');
+    stageDesc.className = 'pipeline-stage-desc';
+    stageDesc.style.cssText = 'font-size: 11px; color: var(--muted); margin-bottom: 12px;';
+    stageDesc.textContent = stage.description || '';
+    stageEl.appendChild(stageDesc);
+
+    // Stage samples
+    const stageSamples = document.createElement('div');
+    stageSamples.className = 'pipeline-stage-samples';
+    stageSamples.style.cssText = 'display: flex; flex-direction: column; gap: 8px; max-height: 400px; overflow-y: auto;';
+
+    if (!stage.samples || stage.samples.length === 0) {
+      stageSamples.innerHTML = '<div style="font-size: 11px; color: var(--muted);">No samples yet</div>';
+    } else {
+      for (const sample of stage.samples) {
+        const sampleDiv = document.createElement('div');
+        sampleDiv.className = 'pipeline-sample';
+        sampleDiv.style.cssText = 'background: var(--bg-secondary); border-radius: 4px; padding: 8px; font-size: 11px;';
+
+        const timestamp = sample.timestamp ? new Date(sample.timestamp * 1000).toLocaleTimeString() : 'N/A';
+
+        // Create clean JSON by removing stage and timestamp fields
+        const jsonData = {...sample};
+        delete jsonData.stage;
+        delete jsonData.timestamp;
+
+        sampleDiv.innerHTML = `
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+            <span style="font-weight: 600; color: var(--brand);">${escapeHtml(vendorName)}</span>
+            <span style="color: var(--muted);">${escapeHtml(timestamp)}</span>
+          </div>
+          <pre style="margin: 0; font-size: 10px; color: var(--text); white-space: pre-wrap; word-break: break-all;">${escapeHtml(JSON.stringify(jsonData, null, 2))}</pre>
+        `;
+
+        stageSamples.appendChild(sampleDiv);
+      }
+    }
+
+    stageEl.appendChild(stageSamples);
+    pipelineFlow.appendChild(stageEl);
+
+    // Add arrow between stages (except after last stage)
+    if (i < stages.length - 1) {
+      const arrow = document.createElement('div');
+      arrow.className = 'pipeline-arrow';
+      arrow.style.cssText = 'font-size: 24px; color: var(--muted); padding: 80px 0;';
+      arrow.textContent = '→';
+      pipelineFlow.appendChild(arrow);
+    }
+  }
+
+  vendorSection.appendChild(pipelineFlow);
+  pipelineContainer.appendChild(vendorSection);
+}
+
+function renderPipelineStage(stage) {
+  const stageMap = {
+    'raw_protocol': 'samplesRaw',
+    'after_vendor_detection': 'samplesVendor',
+    'after_normalization': 'samplesNormalized',
+    'zerobus_batch': 'samplesZerobus'
+  };
+
+  const containerId = stageMap[stage.stage];
+  if (!containerId) return;
+
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  // Update sample count
+  const stageEl = container.closest('.pipeline-stage');
+  const countEl = stageEl?.querySelector('.pipeline-stage-count');
+  if (countEl) {
+    countEl.textContent = `${stage.sample_count || 0} samples`;
+  }
+
+  // Clear previous samples
+  container.innerHTML = '';
+
+  if (!stage.samples || stage.samples.length === 0) {
+    container.innerHTML = '<div class="muted" style="font-size: 11px;">No samples yet</div>';
+    return;
+  }
+
+  // Render samples
+  for (const sample of stage.samples) {
+    const sampleDiv = document.createElement('div');
+    sampleDiv.className = 'pipeline-sample';
+
+    const vendor = sample.vendor_format || 'unknown';
+    const vendorClass = `vendor-${vendor}`;
+    const timestamp = sample.timestamp ? new Date(sample.timestamp * 1000).toLocaleTimeString() : 'N/A';
+
+    // Create clean JSON by removing stage and timestamp fields
+    const jsonData = {...sample};
+    delete jsonData.stage;
+    delete jsonData.timestamp;
+
+    sampleDiv.innerHTML = `
+      <div class="pipeline-sample-header">
+        <span class="pipeline-sample-vendor ${vendorClass}">${escapeHtml(vendor)}</span>
+        <span class="pipeline-sample-time">${escapeHtml(timestamp)}</span>
+      </div>
+      <div class="pipeline-sample-json">${escapeHtml(JSON.stringify(jsonData, null, 2))}</div>
+    `;
+
+    container.appendChild(sampleDiv);
+  }
+}
+
 async function refreshSources() {
   const [data, status] = await Promise.all([apiFetch("/api/sources"), apiFetch("/api/status")]);
   const sources = Array.isArray(data?.sources) ? data.sources : [];
@@ -551,6 +767,8 @@ function wireEvents() {
   const srcRefresh = document.getElementById("btnRefreshSources");
   if (srcRefresh) srcRefresh.addEventListener("click", () => refreshSources().catch(onError));
   $("#btnRefreshMetrics").addEventListener("click", () => refreshMetrics().catch(onError));
+  const pipelineRefresh = document.getElementById("btnRefreshPipeline");
+  if (pipelineRefresh) pipelineRefresh.addEventListener("click", () => refreshPipeline().catch(onError));
 
   const selectAll = document.getElementById('srcSelectAll');
   if (selectAll) {
@@ -875,6 +1093,14 @@ async function boot() {
 
     // Adapt UI based on permissions (must be after wireEvents and refreshAll)
     adaptUIForPermissions();
+
+    // Auto-refresh pipeline diagnostics every 3 seconds
+    setInterval(() => {
+      const pipelineBody = document.getElementById("pipelineBody");
+      if (pipelineBody && pipelineBody.style.display !== "none") {
+        refreshPipeline().catch(e => console.error("Pipeline auto-refresh failed:", e));
+      }
+    }, 3000);
 
     toast("UI ready", "ok");
   } catch (e) {
