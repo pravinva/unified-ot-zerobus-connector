@@ -307,13 +307,227 @@ python -m ot_simulator --web-ui
 
 Access at: **http://localhost:8989**
 
-### Features
+### Navigation Tabs
 
-- **Dashboard** - View all simulator status
-- **Protocol Control** - Start/stop individual protocols
-- **Live Stats** - Sensor counts, update rates
-- **Sensor Inventory** - Browse all 78 sensors
-- **Fault Injection** - Inject faults via API (UI coming soon)
+The Web UI provides six main tabs for comprehensive simulator management:
+
+#### 1. Dashboard Tab
+
+**Real-time overview of simulator status:**
+
+- **Simulator Status Card**
+  - Running state (🟢 Running / 🔴 Stopped)
+  - Uptime duration
+  - Total sensor count across all industries
+  - Active PLC/device count
+  - Number of active vendor modes
+
+- **Active Protocols Card**
+  - OPC UA: Port, node count, connected clients
+  - MQTT: Broker host, connected clients, active topics
+  - Modbus: Port, register count, connected clients
+  - Enable/disable toggles for each protocol
+
+- **Vendor Output Modes Card**
+  - Kepware: Channel/Device/Tag counts, active status
+  - Sparkplug B: Edge node and device counts
+  - Honeywell: Module and point counts
+  - Per-mode enable/disable controls
+
+- **Real-time Metrics**
+  - Updates per second (across all protocols)
+  - Data rate (KB/s)
+  - Active fault count
+  - System resource usage
+
+#### 2. Sensors Tab
+
+**Browse and inspect all 78 industrial sensors:**
+
+- **Grouped by Industry**
+  - Mining (16 sensors)
+  - Utilities (17 sensors)
+  - Manufacturing (18 sensors)
+  - Oil & Gas (27 sensors)
+
+- **Per-Sensor Information**
+  - Current value with timestamp
+  - Unit of measurement
+  - Sensor type (power, vibration, flow, etc.)
+  - Value range (min/max)
+  - Nominal operating point
+  - Fault status indicator
+  - Value history sparkline
+
+- **Sensor Actions**
+  - Inject fault (temporary or permanent)
+  - Override value manually
+  - Reset to nominal
+  - View detailed statistics
+
+#### 3. PLCs Tab
+
+**View PLC/device organization and sensor assignments:**
+
+- **PLC Hierarchy Display**
+  - Organized by industry and PLC type
+  - Shows which sensors belong to each PLC
+  - Real-time connection status
+
+- **PLC Details (per vendor mode)**
+  - **Kepware**: Channel → Device → Tag structure
+  - **Honeywell**: Server → Module → Point composite structure
+  - **Sparkplug B**: Group → EdgeNode → Device → Metric hierarchy
+  - **Generic**: Flat industry/sensor structure
+
+- **Sensor Distribution**
+  - Visual breakdown of sensors per PLC
+  - Industry assignment
+  - Protocol availability (OPC UA / MQTT / Modbus)
+
+#### 4. Protocols Tab
+
+**Detailed protocol configuration and monitoring:**
+
+- **OPC UA Section**
+  - Endpoint URL and port
+  - Security policy (NoSecurity / Basic256Sha256)
+  - Namespace URI
+  - Node count and structure
+  - Connected clients list
+  - Update rate (Hz)
+
+- **MQTT Section**
+  - Broker host and port
+  - TLS configuration
+  - Client ID
+  - Active subscriptions count
+  - Topic prefix
+  - Payload format (JSON / String / Sparkplug B)
+  - Publish rate (Hz)
+  - QoS level
+
+- **Modbus Section**
+  - TCP/RTU mode selection
+  - Host and port (TCP) or serial port (RTU)
+  - Slave ID
+  - Register address mapping by industry
+  - Scale factor
+  - Poll rate (Hz)
+
+- **Protocol Controls**
+  - Start/Stop individual protocols
+  - Restart with new configuration
+  - View protocol-specific logs
+
+#### 5. Modes Tab (NEW)
+
+**Vendor-specific output mode management:**
+
+- **Mode Selection Panel**
+  - Checkbox list of all available vendor modes
+  - Multiple modes can run simultaneously
+  - Real-time status indicators (Active / Disabled)
+
+- **Available Vendor Modes**
+  - ✅ **Generic Mode** - Simple JSON/OPC UA (always available)
+  - ✅ **Kepware Mode** - Channel.Device.Tag structure
+  - ✅ **Sparkplug B Mode** - Industry standard MQTT
+  - ⚪ **Honeywell Experion** - Composite points (.PV/.SP/.OP)
+  - ⚪ **PI Point Format** - OSIsoft PI naming conventions (coming soon)
+  - ⚪ **Azure IoT Hub Format** - Cloud telemetry format (coming soon)
+
+- **Per-Mode Configuration Panels** (expandable when mode selected)
+
+  **Kepware Mode Panel:**
+  - OPC UA endpoint (default: port 49320)
+  - MQTT topic prefix (`kepware/`)
+  - IoT Gateway Format toggle
+  - Batch by device option
+  - Channel/Device/Tag count summary
+  - Real-time sample output viewer
+
+  **Sparkplug B Mode Panel:**
+  - Group ID configuration
+  - Edge Node ID configuration
+  - Device list and assignments
+  - Use Protobuf toggle (JSON default)
+  - COV threshold setting (% change before publish)
+  - Birth/Death certificate status
+  - Sequence number tracking
+  - Real-time MQTT topic viewer
+
+  **Honeywell Experion Panel:**
+  - Server name configuration
+  - PKS version selection
+  - Module list (FIM / ACE / LCN types)
+  - Composite point configuration
+  - Attribute list per point:
+    - PV (Process Value)
+    - PVEUHI (Eng Units High)
+    - PVEULO (Eng Units Low)
+    - PVUNITS (Unit string)
+    - PVBAD (Bad quality flag)
+  - Real-time composite point viewer
+
+- **Mode Actions**
+  - Apply configuration changes
+  - Restart simulators with new modes
+  - Export mode configurations
+  - View mode-specific diagnostics
+
+#### 6. Settings Tab
+
+**Global simulator configuration:**
+
+- **General Settings**
+  - Simulator name
+  - Log level (DEBUG / INFO / WARNING / ERROR)
+  - Auto-start protocols on launch
+  - Update rate (global default, Hz)
+
+- **Sensor Behavior**
+  - Global noise multiplier
+  - Enable/disable drift
+  - Enable/disable cyclic patterns
+  - Anomaly probability (%)
+  - Fault recovery time (seconds)
+
+- **Network Configuration**
+  - Web UI port
+  - Prometheus metrics port
+  - Allow remote connections toggle
+
+- **Industry Selection**
+  - Enable/disable entire industries
+  - Affects sensor count across all protocols
+
+- **Vendor Mode Settings**
+  - Auto-register sensors to all modes toggle
+  - Consistent quality code mapping
+  - Log mode switches
+
+### Live Features
+
+- **WebSocket Updates**
+  - Real-time sensor value updates
+  - Protocol status changes
+  - Vendor mode statistics
+  - Fault events
+  - No page refresh required
+
+- **Interactive Charts**
+  - Sensor value history (last 100 points)
+  - Updates per second trend
+  - Data rate trend
+  - Per-protocol throughput
+
+- **Fault Injection UI**
+  - Select sensor from dropdown
+  - Choose protocol(s) to affect
+  - Set fault duration or permanent
+  - Real-time fault status display
+  - Clear all faults button
 
 ### API Endpoints
 
