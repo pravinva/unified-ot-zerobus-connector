@@ -32,6 +32,148 @@ Enterprise-grade connector for streaming OT/IoT data from industrial protocols (
 - **REST API**: Programmatic control
 - **Protocol Discovery**: Automatic network scanning for OPC-UA/MQTT/Modbus servers
 
+### Diagnostics & Observability
+- **Vendor Format Detection**: Automatic identification of Kepware, Sparkplug B, Honeywell, and generic formats
+- **Pipeline Visibility**: Visual representation of data transformation stages
+- **OPC UA Browse Paths**: Full hierarchical path capture for vendor-specific structures
+- **Per-Vendor Metrics**: Track message counts by detected vendor format
+- **Enhanced Web UI**: Real-time dashboards with vendor breakdown and pipeline stats
+
+## Diagnostics & Pipeline Visibility
+
+### Vendor Format Detection
+
+The connector automatically detects and tracks vendor-specific data formats in real-time:
+
+**Supported Vendor Formats:**
+- **Kepware**: Channel.Device.Tag structure (e.g., `Siemens_S7_Crushing.Crusher_01.MotorPower`)
+- **Sparkplug B**: MQTT topics with NBIRTH/DBIRTH/NDATA/DDATA, bdSeq fields
+- **Honeywell Experion**: Composite points (.PV/.SP/.OP/.MODE), FIM/AIM/PID modules
+- **Generic**: Simple path-based structures
+- **Unknown**: Unrecognized formats
+
+**Detection Metrics (REST API):**
+```bash
+curl http://localhost:8001/api/metrics | jq '.bridge.vendor_formats'
+{
+  "kepware": 1250,
+  "sparkplug_b": 847,
+  "honeywell": 503,
+  "generic": 11451,
+  "unknown": 0
+}
+```
+
+### Data Transformation Pipeline
+
+The connector transforms industrial protocol messages through multiple stages:
+
+**Without Normalization (Vendor Format Preserved):**
+```
+1. Protocol Source (Kepware/Sparkplug B/Honeywell)
+   ↓
+2. Protocol Client (OPC UA/MQTT/Modbus)
+   ↓
+3. ProtocolRecord (vendor-specific format)
+   ↓
+4. Vendor Format Detection (adds vendor_format tag)
+   ↓
+5. record.to_dict() (converts to dictionary)
+   ↓
+6. Backpressure Queue (memory → disk spool if needed)
+   ↓
+7. ZeroBus Batcher (max 1000 records or 5sec timeout)
+   ↓
+8. Delta Table (Databricks)
+```
+
+**With ISA-95 Normalization (Enabled):**
+```
+1. Protocol Source
+   ↓
+2. Protocol Client
+   ↓
+3. ProtocolRecord
+   ↓
+4. Vendor Format Detection
+   ↓
+5. ISA-95 Normalizer ← STANDARDIZATION HAPPENS HERE
+   ├─ Extracts site_id, line_id, equipment_id, signal_type
+   ├─ Builds normalized path: "{site_id}/{line_id}/{equipment_id}/{signal_type}"
+   ├─ Maps quality codes to standard values
+   ├─ Generates tag_id hash
+   └─ Adds engineering units metadata
+   ↓
+6. Normalized Tag (ISA-95 compliant)
+   ↓
+7. Backpressure Queue
+   ↓
+8. ZeroBus Batcher
+   ↓
+9. Delta Table
+```
+
+### OPC UA Browse Path Enhancement
+
+**Full Hierarchical Path Capture:**
+
+The OPC UA client now captures complete browse paths during node discovery, enabling proper vendor format detection:
+
+**Implementation** (`unified_connector/protocols/opcua_client.py`):
+- Added `_node_paths` dictionary to store node_id → full_browse_path mappings
+- Modified `_discover_variables()` to store complete hierarchical paths
+- Updated `subscribe()` and `_poll_loop()` to use stored browse paths
+
+**Example Paths:**
+- Kepware: `VendorModes/Kepware/Siemens_S7_Crushing/Crusher_01/CrusherMotorPower`
+- Honeywell: `VendorModes/Honeywell/MINE_A_EXPERION_PKS/FIM_01/CRUSHER_01_POWER/PV`
+- Sparkplug B: `VendorModes/Sparkplug B/DatabricksDemo/OTSimulator01/MiningAssets/mining_crusher_1_motor_power`
+- Generic: `IndustrialSensors/Agriculture/barn_ventilation_fan_speed`
+
+This enables the connector to accurately detect vendor formats based on path patterns rather than just leaf node names.
+
+### Web UI Enhancements
+
+**Enhanced Diagnostics Dashboard:**
+
+The Web UI (http://localhost:8001) now includes:
+
+1. **Vendor Format Breakdown**
+   - Real-time counts per vendor format
+   - Percentage distribution pie chart
+   - Sample paths per format
+
+2. **Pipeline Performance Metrics**
+   - Messages/sec at each stage
+   - Queue depths (memory/disk)
+   - Backpressure events
+   - ZeroBus batch sizes
+
+3. **Protocol-Specific Stats**
+   - OPC UA: Browse path distribution, node counts by vendor structure
+   - MQTT: Topic hierarchy analysis, QoS distribution
+   - Modbus: Register address utilization
+
+4. **Data Quality Indicators**
+   - Quality code distribution per protocol
+   - Normalization success rate
+   - Data type inference accuracy
+
+**API Endpoints:**
+```bash
+# Vendor format metrics
+GET /api/metrics
+
+# Sample records per vendor format
+GET /api/vendor-samples?format=kepware&limit=10
+
+# Pipeline stage statistics
+GET /api/pipeline-stats
+
+# Recent records with vendor detection
+GET /api/records?limit=100
+```
+
 ## Architecture
 
 ```
