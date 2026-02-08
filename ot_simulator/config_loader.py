@@ -96,6 +96,17 @@ class SensorConfig:
     utilities: dict[str, Any] = field(default_factory=lambda: {"enabled": True})
     manufacturing: dict[str, Any] = field(default_factory=lambda: {"enabled": True})
     oil_gas: dict[str, Any] = field(default_factory=lambda: {"enabled": True})
+    renewable_energy: dict[str, Any] = field(default_factory=lambda: {"enabled": True})
+    aerospace: dict[str, Any] = field(default_factory=lambda: {"enabled": False})
+    space: dict[str, Any] = field(default_factory=lambda: {"enabled": False})
+    water_wastewater: dict[str, Any] = field(default_factory=lambda: {"enabled": False})
+    automotive: dict[str, Any] = field(default_factory=lambda: {"enabled": False})
+    chemical: dict[str, Any] = field(default_factory=lambda: {"enabled": False})
+    food_beverage: dict[str, Any] = field(default_factory=lambda: {"enabled": False})
+    pharmaceutical: dict[str, Any] = field(default_factory=lambda: {"enabled": False})
+    data_center: dict[str, Any] = field(default_factory=lambda: {"enabled": False})
+    smart_building: dict[str, Any] = field(default_factory=lambda: {"enabled": False})
+    agriculture: dict[str, Any] = field(default_factory=lambda: {"enabled": False})
 
 
 @dataclass

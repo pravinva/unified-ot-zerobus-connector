@@ -176,17 +176,20 @@ async function refreshMetrics() {
 
 async function refreshPipeline() {
   try {
-    const data = await apiFetch("/api/diagnostics/pipeline");
+    const [pipelineData, metricsData] = await Promise.all([
+      apiFetch("/api/diagnostics/pipeline"),
+      apiFetch("/api/metrics")
+    ]);
 
     // Update vendor format badges
-    const vendorFormats = data.vendor_format_summary || {};
+    const vendorFormats = pipelineData.vendor_format_summary || {};
     $("#vendorKepware").innerHTML = `<strong>Kepware: ${vendorFormats.kepware || 0}</strong>`;
     $("#vendorSparkplug").innerHTML = `<strong>Sparkplug B: ${vendorFormats.sparkplug_b || 0}</strong>`;
     $("#vendorHoneywell").innerHTML = `<strong>Honeywell: ${vendorFormats.honeywell || 0}</strong>`;
     $("#vendorGeneric").innerHTML = `<strong>Generic: ${vendorFormats.generic || 0}</strong>`;
 
     // Update normalization status
-    const normEnabled = data.normalization_enabled || false;
+    const normEnabled = pipelineData.normalization_enabled || false;
     $("#pipelineNormStatus").textContent = `ISA-95 normalization: ${normEnabled ? 'ENABLED' : 'DISABLED'}`;
     $("#pipelineNormStatus").style.color = normEnabled ? 'var(--good)' : 'var(--warning)';
 
@@ -197,32 +200,505 @@ async function refreshPipeline() {
     // Clear existing pipeline
     pipelineContainer.innerHTML = '';
 
-    // Render per-vendor pipelines
-    const vendorPipelines = data.vendor_pipelines || {};
+    // Get protocol-vendor breakdown from metrics
+    const protocolVendorBreakdown = metricsData?.bridge?.protocol_vendor_breakdown || {};
 
-    // Vendor display names
-    const vendorNames = {
-      kepware: 'Kepware',
-      sparkplug_b: 'Sparkplug B',
-      honeywell: 'Honeywell',
-      opcua: 'OPC UA',
-      modbus: 'Modbus',
-      generic: 'Generic',
-      unknown: 'Unknown'
-    };
+    // Render protocol-vendor breakdown section
+    renderProtocolVendorBreakdown(protocolVendorBreakdown);
 
-    // Only show vendors with records
-    for (const [vendorKey, vendorData] of Object.entries(vendorPipelines)) {
-      if (vendorData.record_count === 0 && vendorKey !== 'kepware' && vendorKey !== 'honeywell' && vendorKey !== 'generic') {
-        continue; // Skip vendors with no data (except main ones)
-      }
+    // Reorganize vendor pipelines by protocol-vendor combination
+    const vendorPipelines = pipelineData.vendor_pipelines || {};
+    const protocolVendorPipelines = organizeByProtocolVendor(vendorPipelines);
 
-      renderVendorPipeline(vendorKey, vendorNames[vendorKey] || vendorKey, vendorData);
+    console.log('Protocol-Vendor Pipelines:', Object.keys(protocolVendorPipelines));
+
+    // Render filter controls
+    renderPipelineFilters(protocolVendorPipelines);
+
+    // Get selected filters
+    const selectedProtocol = window.pipelineFilterProtocol || 'all';
+    const selectedVendor = window.pipelineFilterVendor || 'all';
+
+    // Render per protocol-vendor pipelines based on filters
+    for (const [key, data] of Object.entries(protocolVendorPipelines)) {
+      // Apply filters
+      if (selectedProtocol !== 'all' && data.protocol !== selectedProtocol) continue;
+      if (selectedVendor !== 'all' && data.vendor !== selectedVendor) continue;
+
+      console.log(`Rendering ${key}:`, data.protocol, '→', data.vendor, `(${data.stages.length} stages)`);
+      renderProtocolVendorPipeline(key, data.protocol, data.vendor, data.stages, data.recordCount);
     }
   } catch (e) {
     console.error("Failed to refresh pipeline diagnostics:", e);
     toast("Failed to load pipeline diagnostics", "bad");
   }
+}
+
+/**
+ * Render filter controls for protocol and vendor selection
+ */
+function renderPipelineFilters(protocolVendorPipelines) {
+  const pipelineContainer = document.getElementById('pipelineFlowContainer');
+  if (!pipelineContainer) return;
+
+  // Extract unique protocols and vendors
+  const protocols = new Set();
+  const vendors = new Set();
+
+  for (const data of Object.values(protocolVendorPipelines)) {
+    protocols.add(data.protocol);
+    vendors.add(data.vendor);
+  }
+
+  // Protocol display names
+  const protocolNames = {
+    opcua: 'OPC UA',
+    mqtt: 'MQTT',
+    modbus: 'Modbus',
+    unknown: 'Unknown'
+  };
+
+  // Vendor display names
+  const vendorNames = {
+    kepware: 'Kepware',
+    sparkplug_b: 'Sparkplug B',
+    honeywell: 'Honeywell',
+    opcua: 'OPC UA',
+    modbus: 'Modbus',
+    generic: 'Generic',
+    unknown: 'Unknown'
+  };
+
+  // Create filter section
+  const filterSection = document.createElement('div');
+  filterSection.className = 'pipeline-filters';
+  filterSection.style.cssText = 'margin-bottom: 20px; padding: 16px; background: var(--bg-secondary); border-radius: 8px; display: flex; gap: 16px; align-items: center;';
+
+  // Filter label
+  const filterLabel = document.createElement('div');
+  filterLabel.style.cssText = 'font-size: 14px; font-weight: 700; color: var(--text);';
+  filterLabel.textContent = 'Filter Pipeline:';
+  filterSection.appendChild(filterLabel);
+
+  // Protocol filter
+  const protocolFilterContainer = document.createElement('div');
+  protocolFilterContainer.style.cssText = 'display: flex; flex-direction: column; gap: 4px;';
+
+  const protocolLabel = document.createElement('label');
+  protocolLabel.style.cssText = 'font-size: 11px; color: var(--muted); font-weight: 600;';
+  protocolLabel.textContent = 'Protocol:';
+  protocolFilterContainer.appendChild(protocolLabel);
+
+  const protocolSelect = document.createElement('select');
+  protocolSelect.id = 'pipelineProtocolFilter';
+  protocolSelect.style.cssText = 'padding: 6px 12px; border: 1px solid var(--border-panel); border-radius: 4px; background: var(--bg-secondary); color: var(--text-primary); font-size: 13px; cursor: pointer; min-width: 150px;';
+
+  // Add "All" option
+  const allProtocolOption = document.createElement('option');
+  allProtocolOption.value = 'all';
+  allProtocolOption.textContent = 'All Protocols';
+  protocolSelect.appendChild(allProtocolOption);
+
+  // Add protocol options
+  for (const protocol of Array.from(protocols).sort()) {
+    if (protocol === 'unknown') continue;
+    const option = document.createElement('option');
+    option.value = protocol;
+    option.textContent = protocolNames[protocol] || protocol;
+    protocolSelect.appendChild(option);
+  }
+
+  protocolSelect.addEventListener('change', () => {
+    window.pipelineFilterProtocol = protocolSelect.value;
+    refreshPipeline();
+  });
+
+  protocolFilterContainer.appendChild(protocolSelect);
+  filterSection.appendChild(protocolFilterContainer);
+
+  // Vendor filter
+  const vendorFilterContainer = document.createElement('div');
+  vendorFilterContainer.style.cssText = 'display: flex; flex-direction: column; gap: 4px;';
+
+  const vendorLabel = document.createElement('label');
+  vendorLabel.style.cssText = 'font-size: 11px; color: var(--muted); font-weight: 600;';
+  vendorLabel.textContent = 'Vendor Format:';
+  vendorFilterContainer.appendChild(vendorLabel);
+
+  const vendorSelect = document.createElement('select');
+  vendorSelect.id = 'pipelineVendorFilter';
+  vendorSelect.style.cssText = 'padding: 6px 12px; border: 1px solid var(--border-panel); border-radius: 4px; background: var(--bg-secondary); color: var(--text-primary); font-size: 13px; cursor: pointer; min-width: 150px;';
+
+  // Add "All" option
+  const allVendorOption = document.createElement('option');
+  allVendorOption.value = 'all';
+  allVendorOption.textContent = 'All Vendors';
+  vendorSelect.appendChild(allVendorOption);
+
+  // Add vendor options
+  for (const vendor of Array.from(vendors).sort()) {
+    if (vendor === 'unknown') continue;
+    const option = document.createElement('option');
+    option.value = vendor;
+    option.textContent = vendorNames[vendor] || vendor;
+    vendorSelect.appendChild(option);
+  }
+
+  vendorSelect.addEventListener('change', () => {
+    window.pipelineFilterVendor = vendorSelect.value;
+    refreshPipeline();
+  });
+
+  vendorFilterContainer.appendChild(vendorSelect);
+  filterSection.appendChild(vendorFilterContainer);
+
+  // Restore selected values
+  if (window.pipelineFilterProtocol) {
+    protocolSelect.value = window.pipelineFilterProtocol;
+  }
+  if (window.pipelineFilterVendor) {
+    vendorSelect.value = window.pipelineFilterVendor;
+  }
+
+  pipelineContainer.appendChild(filterSection);
+}
+
+/**
+ * Reorganize vendor pipelines by protocol-vendor combination
+ * Takes vendor_pipelines structure and splits by protocol found in samples
+ */
+function organizeByProtocolVendor(vendorPipelines) {
+  const protocolVendorPipelines = {};
+
+  for (const [vendorKey, vendorData] of Object.entries(vendorPipelines)) {
+    const stages = vendorData.pipeline_stages || [];
+    if (!stages || stages.length === 0) continue;
+
+    // Group samples by protocol across all stages
+    const protocolGroups = {};
+    const sourceNameToProtocol = {}; // Map source_name to protocol for later stages
+
+    // First stage has the protocol field
+    const firstStage = stages[0];
+    const firstStageSamples = firstStage.samples || [];
+
+    for (const sample of firstStageSamples) {
+      const protocol = sample.protocol || sample.protocol_type || 'unknown';
+      const sourceName = sample.source_name || 'unknown';
+
+      // Remember which protocol this source_name belongs to
+      sourceNameToProtocol[sourceName] = protocol;
+
+      if (!protocolGroups[protocol]) {
+        protocolGroups[protocol] = {
+          protocol,
+          vendor: vendorKey,
+          stages: [],
+          recordCount: 0,
+          samplesByStage: {}
+        };
+      }
+    }
+
+    // Now organize samples from all stages by protocol
+    for (let stageIdx = 0; stageIdx < stages.length; stageIdx++) {
+      const stage = stages[stageIdx];
+      const stageName = stage.stage || stage.name || stage.stage_name || `Stage ${stageIdx + 1}`;
+      const samples = stage.samples || [];
+
+      // Initialize stage structure for all protocols (even if no samples yet)
+      for (const protocol of Object.keys(protocolGroups)) {
+        if (!protocolGroups[protocol].samplesByStage[stageIdx]) {
+          protocolGroups[protocol].samplesByStage[stageIdx] = {
+            name: stageName,
+            description: stage.description || '',
+            samples: []
+          };
+        }
+      }
+
+      // Group samples by protocol
+      for (const sample of samples) {
+        // Try to get protocol from sample first, then from source_name mapping
+        let protocol = sample.protocol || sample.protocol_type;
+
+        if (!protocol && sample.source_name) {
+          protocol = sourceNameToProtocol[sample.source_name];
+        }
+
+        protocol = protocol || 'unknown';
+
+        if (protocolGroups[protocol]) {
+          protocolGroups[protocol].samplesByStage[stageIdx].samples.push(sample);
+          protocolGroups[protocol].recordCount++;
+        }
+      }
+    }
+
+    // Convert samplesByStage to stages array
+    for (const [protocol, group] of Object.entries(protocolGroups)) {
+      group.stages = Object.values(group.samplesByStage);
+      delete group.samplesByStage;
+
+      const key = `${protocol}_${vendorKey}`;
+      protocolVendorPipelines[key] = group;
+    }
+  }
+
+  return protocolVendorPipelines;
+}
+
+/**
+ * Render a pipeline flow for a specific protocol-vendor combination
+ */
+function renderProtocolVendorPipeline(key, protocol, vendor, stages, recordCount) {
+  const pipelineContainer = document.getElementById('pipelineFlowContainer');
+  if (!pipelineContainer) return;
+
+  // Display names
+  const protocolNames = {
+    opcua: 'OPC UA',
+    mqtt: 'MQTT',
+    modbus: 'Modbus',
+    unknown: 'Unknown'
+  };
+
+  const vendorNames = {
+    kepware: 'Kepware',
+    sparkplug_b: 'Sparkplug B',
+    honeywell: 'Honeywell',
+    opcua: 'OPC UA',
+    modbus: 'Modbus',
+    generic: 'Generic',
+    unknown: 'Unknown'
+  };
+
+  const protocolDisplay = protocolNames[protocol] || protocol;
+  const vendorDisplay = vendorNames[vendor] || vendor;
+
+  // Create pipeline section
+  const pipelineSection = document.createElement('div');
+  pipelineSection.className = 'protocol-vendor-pipeline-section';
+  pipelineSection.style.marginBottom = '24px';
+
+  // Pipeline header showing protocol → vendor → ZeroBus
+  const pipelineHeader = document.createElement('div');
+  pipelineHeader.style.cssText = 'display: flex; align-items: center; gap: 12px; margin-bottom: 12px; padding: 12px; background: var(--bg-secondary); border-radius: 6px;';
+
+  pipelineHeader.innerHTML = `
+    <span class="pill secondary" style="font-size: 12px; padding: 6px 12px;">${escapeHtml(protocolDisplay)}</span>
+    <span style="font-size: 16px; color: var(--text-muted);">→</span>
+    <span class="pill secondary" style="font-size: 12px; padding: 6px 12px;">${escapeHtml(vendorDisplay)}</span>
+    <span style="font-size: 16px; color: var(--text-muted);">→</span>
+    <span class="pill secondary" style="font-size: 12px; padding: 6px 12px;">ISA-95</span>
+    <span style="font-size: 16px; color: var(--text-muted);">→</span>
+    <span class="pill primary" style="font-size: 12px; padding: 6px 12px;">ZeroBus</span>
+    <span style="margin-left: auto; font-size: 12px; color: var(--text-secondary); font-family: var(--font-data);">${recordCount} records</span>
+  `;
+  pipelineSection.appendChild(pipelineHeader);
+
+  // Pipeline flow container
+  const pipelineFlow = document.createElement('div');
+  pipelineFlow.className = 'pipeline-flow';
+  pipelineFlow.style.cssText = 'display: flex; align-items: flex-start; gap: 12px; overflow-x: auto; padding: 4px;';
+
+  // Stage display names
+  const stageDisplayNames = {
+    'raw_protocol': 'Raw Protocol',
+    'after_vendor_detection': 'Vendor Detection',
+    'after_normalization': 'ISA-95 Normalization',
+    'zerobus_batch': 'ZeroBus Batch'
+  };
+
+  // Render each stage
+  for (let i = 0; i < stages.length; i++) {
+    const stage = stages[i];
+    const stageName = stage.stage || stage.name || stage.stage_name || `Stage ${i + 1}`;
+    const stageDisplay = stageDisplayNames[stageName] || stageName;
+
+    // Create stage element
+    const stageEl = document.createElement('div');
+    stageEl.className = 'pipeline-stage';
+    stageEl.style.cssText = 'flex: 1; min-width: 260px; background: var(--bg-secondary); border: 1px solid var(--border-panel); border-radius: 8px; padding: 12px;';
+
+    // Stage header
+    const stageHeader = document.createElement('div');
+    stageHeader.className = 'pipeline-stage-header';
+    stageHeader.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;';
+
+    const stageTitle = document.createElement('div');
+    stageTitle.className = 'pipeline-stage-title';
+    stageTitle.style.cssText = 'font-size: 13px; font-weight: 700; color: var(--bloomberg-orange); text-transform: uppercase;';
+    stageTitle.textContent = `${i + 1}. ${stageDisplay}`;
+
+    const stageCount = document.createElement('div');
+    stageCount.className = 'pipeline-stage-count';
+    stageCount.style.cssText = 'font-size: 11px; color: var(--text-secondary); font-weight: 600;';
+    stageCount.textContent = `${stage.samples?.length || 0} samples`;
+
+    stageHeader.appendChild(stageTitle);
+    stageHeader.appendChild(stageCount);
+    stageEl.appendChild(stageHeader);
+
+    // Stage description
+    const stageDesc = document.createElement('div');
+    stageDesc.className = 'pipeline-stage-desc';
+    stageDesc.style.cssText = 'font-size: 11px; color: var(--text-secondary); margin-bottom: 12px;';
+    stageDesc.textContent = stage.description || '';
+    stageEl.appendChild(stageDesc);
+
+    // Stage samples
+    const stageSamples = document.createElement('div');
+    stageSamples.className = 'pipeline-stage-samples';
+    stageSamples.style.cssText = 'display: flex; flex-direction: column; gap: 8px; max-height: 400px; overflow-y: auto;';
+
+    if (!stage.samples || stage.samples.length === 0) {
+      stageSamples.innerHTML = '<div style="font-size: 11px; color: var(--text-secondary);">No samples yet</div>';
+    } else {
+      // Show max 3 samples
+      const samplesToShow = stage.samples.slice(0, 3);
+      for (const sample of samplesToShow) {
+        const sampleDiv = document.createElement('div');
+        sampleDiv.className = 'pipeline-sample';
+        sampleDiv.style.cssText = 'background: var(--bg-panel); border: 1px solid var(--border-panel); border-left: 3px solid var(--status-idle); border-radius: 4px; padding: 8px; font-size: 11px;';
+
+        const timestamp = sample.timestamp ? new Date(sample.timestamp * 1000).toLocaleTimeString() : 'N/A';
+
+        // Create clean JSON by removing stage and timestamp fields
+        const jsonData = {...sample};
+        delete jsonData.stage;
+        delete jsonData.timestamp;
+        delete jsonData.protocol;
+        delete jsonData.protocol_type;
+
+        sampleDiv.innerHTML = `
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+            <span style="font-weight: 600; color: var(--status-running);">${escapeHtml(vendorDisplay)}</span>
+            <span style="color: var(--text-muted); font-family: var(--font-data);">${escapeHtml(timestamp)}</span>
+          </div>
+          <pre style="margin: 0; font-size: 10px; color: var(--text-primary); font-family: var(--font-data); white-space: pre-wrap; word-break: break-all; background: rgba(0, 0, 0, 0.3); padding: 8px; border-radius: 3px;">${escapeHtml(JSON.stringify(jsonData, null, 2))}</pre>
+        `;
+
+        stageSamples.appendChild(sampleDiv);
+      }
+    }
+
+    stageEl.appendChild(stageSamples);
+    pipelineFlow.appendChild(stageEl);
+
+    // Add arrow between stages (except after last stage)
+    if (i < stages.length - 1) {
+      const arrow = document.createElement('div');
+      arrow.className = 'pipeline-arrow';
+      arrow.style.cssText = 'font-size: 24px; color: var(--muted); padding: 80px 0;';
+      arrow.textContent = '→';
+      pipelineFlow.appendChild(arrow);
+    }
+  }
+
+  pipelineSection.appendChild(pipelineFlow);
+  pipelineContainer.appendChild(pipelineSection);
+}
+
+function renderProtocolVendorBreakdown(protocolVendorBreakdown) {
+  const pipelineContainer = document.getElementById('pipelineFlowContainer');
+  if (!pipelineContainer) return;
+
+  // Protocol display names
+  const protocolNames = {
+    opcua: 'OPC UA',
+    mqtt: 'MQTT',
+    modbus: 'Modbus',
+    unknown: 'Unknown'
+  };
+
+  // Vendor display names
+  const vendorNames = {
+    kepware: 'Kepware',
+    sparkplug_b: 'Sparkplug B',
+    honeywell: 'Honeywell',
+    opcua: 'OPC UA',
+    modbus: 'Modbus',
+    generic: 'Generic',
+    unknown: 'Unknown'
+  };
+
+  // Create breakdown section
+  const breakdownSection = document.createElement('div');
+  breakdownSection.className = 'protocol-vendor-breakdown';
+  breakdownSection.style.cssText = 'margin-bottom: 24px; padding: 16px; background: var(--bg-secondary); border-radius: 8px;';
+
+  // Section header
+  const header = document.createElement('div');
+  header.style.cssText = 'font-size: 15px; font-weight: 700; color: var(--bloomberg-orange); margin-bottom: 12px; text-transform: uppercase;';
+  header.textContent = 'Protocol → Vendor Format Breakdown';
+  breakdownSection.appendChild(header);
+
+  // Create grid for protocol-vendor combinations
+  const grid = document.createElement('div');
+  grid.style.cssText = 'display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px;';
+
+  // Iterate through protocols
+  for (const [protocol, vendors] of Object.entries(protocolVendorBreakdown)) {
+    if (!vendors || typeof vendors !== 'object') continue;
+
+    // Skip unknown if it has no meaningful data
+    if (protocol === 'unknown' && Object.keys(vendors).length === 1 && vendors.unknown) {
+      continue;
+    }
+
+    // Iterate through vendors for this protocol
+    for (const [vendor, count] of Object.entries(vendors)) {
+      if (count === 0) continue;
+
+      // Create card for this protocol-vendor combo
+      const card = document.createElement('div');
+      card.style.cssText = 'background: var(--bg-panel); border: 1px solid var(--border-panel); border-radius: 6px; padding: 12px; display: flex; flex-direction: column; gap: 8px;';
+
+      // Protocol → Vendor label
+      const label = document.createElement('div');
+      label.style.cssText = 'display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--text-primary);';
+
+      // Protocol badge
+      const protocolBadge = document.createElement('span');
+      protocolBadge.className = 'pill secondary';
+      protocolBadge.style.cssText = 'font-size: 11px; padding: 4px 8px;';
+      protocolBadge.textContent = protocolNames[protocol] || protocol;
+
+      // Arrow
+      const arrow = document.createElement('span');
+      arrow.style.cssText = 'color: var(--text-muted); font-size: 16px;';
+      arrow.textContent = '→';
+
+      // Vendor badge
+      const vendorBadge = document.createElement('span');
+      vendorBadge.className = 'pill secondary';
+      vendorBadge.style.cssText = 'font-size: 11px; padding: 4px 8px;';
+      vendorBadge.textContent = vendorNames[vendor] || vendor;
+
+      label.appendChild(protocolBadge);
+      label.appendChild(arrow);
+      label.appendChild(vendorBadge);
+      card.appendChild(label);
+
+      // Count
+      const countDiv = document.createElement('div');
+      countDiv.style.cssText = 'font-size: 20px; font-weight: 700; color: var(--status-running); font-family: var(--font-data);';
+      countDiv.textContent = count.toLocaleString();
+      card.appendChild(countDiv);
+
+      // Description
+      const desc = document.createElement('div');
+      desc.style.cssText = 'font-size: 11px; color: var(--text-secondary);';
+      desc.textContent = 'records';
+      card.appendChild(desc);
+
+      grid.appendChild(card);
+    }
+  }
+
+  breakdownSection.appendChild(grid);
+  pipelineContainer.appendChild(breakdownSection);
 }
 
 function renderVendorPipeline(vendorKey, vendorName, vendorData) {
@@ -258,7 +734,7 @@ function renderVendorPipeline(vendorKey, vendorName, vendorData) {
     // Create stage element
     const stageEl = document.createElement('div');
     stageEl.className = 'pipeline-stage';
-    stageEl.style.cssText = 'flex: 1; min-width: 240px; background: white; border: 1px solid var(--border); border-radius: 8px; padding: 12px;';
+    stageEl.style.cssText = 'flex: 1; min-width: 240px; background: var(--bg-secondary); border: 1px solid var(--border-panel); border-radius: 8px; padding: 12px;';
 
     // Stage header
     const stageHeader = document.createElement('div');
@@ -267,12 +743,12 @@ function renderVendorPipeline(vendorKey, vendorName, vendorData) {
 
     const stageTitle = document.createElement('div');
     stageTitle.className = 'pipeline-stage-title';
-    stageTitle.style.cssText = 'font-size: 13px; font-weight: 700; color: var(--text);';
+    stageTitle.style.cssText = 'font-size: 13px; font-weight: 700; color: var(--bloomberg-orange); text-transform: uppercase;';
     stageTitle.textContent = `${i + 1}. ${stage.name || stage.stage}`;
 
     const stageCount = document.createElement('div');
     stageCount.className = 'pipeline-stage-count';
-    stageCount.style.cssText = 'font-size: 11px; color: var(--muted); font-weight: 600;';
+    stageCount.style.cssText = 'font-size: 11px; color: var(--text-secondary); font-weight: 600;';
     stageCount.textContent = `${stage.sample_count || 0} samples`;
 
     stageHeader.appendChild(stageTitle);
@@ -282,7 +758,7 @@ function renderVendorPipeline(vendorKey, vendorName, vendorData) {
     // Stage description
     const stageDesc = document.createElement('div');
     stageDesc.className = 'pipeline-stage-desc';
-    stageDesc.style.cssText = 'font-size: 11px; color: var(--muted); margin-bottom: 12px;';
+    stageDesc.style.cssText = 'font-size: 11px; color: var(--text-secondary); margin-bottom: 12px;';
     stageDesc.textContent = stage.description || '';
     stageEl.appendChild(stageDesc);
 
@@ -292,12 +768,12 @@ function renderVendorPipeline(vendorKey, vendorName, vendorData) {
     stageSamples.style.cssText = 'display: flex; flex-direction: column; gap: 8px; max-height: 400px; overflow-y: auto;';
 
     if (!stage.samples || stage.samples.length === 0) {
-      stageSamples.innerHTML = '<div style="font-size: 11px; color: var(--muted);">No samples yet</div>';
+      stageSamples.innerHTML = '<div style="font-size: 11px; color: var(--text-secondary);">No samples yet</div>';
     } else {
       for (const sample of stage.samples) {
         const sampleDiv = document.createElement('div');
         sampleDiv.className = 'pipeline-sample';
-        sampleDiv.style.cssText = 'background: var(--bg-secondary); border-radius: 4px; padding: 8px; font-size: 11px;';
+        sampleDiv.style.cssText = 'background: var(--bg-panel); border: 1px solid var(--border-panel); border-left: 3px solid var(--status-idle); border-radius: 4px; padding: 8px; font-size: 11px;';
 
         const timestamp = sample.timestamp ? new Date(sample.timestamp * 1000).toLocaleTimeString() : 'N/A';
 

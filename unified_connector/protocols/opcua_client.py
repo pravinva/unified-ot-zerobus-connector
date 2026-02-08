@@ -54,9 +54,10 @@ class OPCUAClient(ProtocolClient):
         self.publishing_interval_ms = int(config.get("publishing_interval_ms", 1000))
         self.timeout_s = float(config.get("timeout", 5.0))
 
-        # Polling mode: actively read values at polling_interval_ms instead of using subscriptions
-        # This bypasses deadband filtering which prevents data-on-change notifications
-        self.polling_mode = config.get("polling_mode", True)  # Default to polling
+        # Subscription mode: use OPC-UA data-change notifications (more efficient)
+        # If subscription_mode is True, use subscriptions; otherwise use polling
+        subscription_mode = config.get("subscription_mode", False)
+        self.polling_mode = not subscription_mode  # Invert: subscription_mode=True means polling_mode=False
         self.polling_interval_ms = int(config.get("polling_interval_ms", 500))  # Match simulator's 2 Hz (500ms)
 
         # Security configuration
@@ -183,7 +184,17 @@ class OPCUAClient(ProtocolClient):
         self.security_manager.log_security_status()
 
         # Create client with timeout
+        # Increase watchdog timeout for large subscription counts (1500+ variables)
+        # Default asyncua watchdog is 4 seconds, which is too aggressive
         self._client = Client(url=self.endpoint, timeout=self.security_config.timeout_s)
+
+        # Set longer watchdog timeout for subscription mode with many variables
+        if hasattr(self._client, 'uaclient') and hasattr(self._client.uaclient, 'set_watchdog_timeout'):
+            # Calculate watchdog timeout based on variable count
+            # Allow at least 2 seconds per 100 variables for initial subscription setup
+            watchdog_timeout = max(30.0, (self.variable_limit / 100) * 2)
+            self._client.uaclient.set_watchdog_timeout(watchdog_timeout)
+            logger.info(f"Set OPC UA watchdog timeout to {watchdog_timeout}s for {self.variable_limit} variables")
 
         # Configure security if enabled
         if self.security_config.enabled:
@@ -481,12 +492,13 @@ class OPCUAClient(ProtocolClient):
             objects_node = self._client.nodes.objects
             logger.info("📂 Browsing Objects root node...")
 
-            # Try to find IndustrialSensors folder first
+            # Try to find IndustrialSensors and VendorModes folders
             try:
                 children = await objects_node.get_children()
                 logger.info(f"   Objects has {len(children)} direct children")
 
                 industrial_sensors_node = None
+                vendor_modes_node = None
 
                 for child in children:
                     try:
@@ -495,19 +507,33 @@ class OPCUAClient(ProtocolClient):
                         if browse_name.Name == "IndustrialSensors":
                             industrial_sensors_node = child
                             logger.info(f"✓ Found IndustrialSensors node!")
-                            break
+                        elif browse_name.Name == "VendorModes":
+                            vendor_modes_node = child
+                            logger.info(f"✓ Found VendorModes node!")
                     except Exception as e:
                         logger.debug(f"   ⚠ Error reading child browse name: {e}")
                         continue
 
-                if industrial_sensors_node:
-                    # Start browsing from IndustrialSensors folder (contains actual sensor data)
-                    logger.info("🎯 Browsing from IndustrialSensors namespace...")
-                    await browse_node(industrial_sensors_node, path="IndustrialSensors")
-                    logger.info(f"✓ Discovery complete: {len(variables)} variables found")
+                # Browse both IndustrialSensors and VendorModes if available
+                if industrial_sensors_node or vendor_modes_node:
+                    if industrial_sensors_node:
+                        # Browse IndustrialSensors folder (standard sensor data)
+                        logger.info("🎯 Browsing from IndustrialSensors namespace...")
+                        await browse_node(industrial_sensors_node, path="IndustrialSensors")
+                        logger.info(f"✓ IndustrialSensors: {len(variables)} variables found")
+
+                    if vendor_modes_node:
+                        # Browse VendorModes folder (Kepware, Honeywell, Sparkplug B, Generic)
+                        logger.info("🎯 Browsing from VendorModes namespace...")
+                        vendor_start = len(variables)
+                        await browse_node(vendor_modes_node, path="VendorModes")
+                        vendor_count = len(variables) - vendor_start
+                        logger.info(f"✓ VendorModes: {vendor_count} vendor-specific variables found")
+
+                    logger.info(f"✓ Discovery complete: {len(variables)} total variables found")
                 else:
-                    # Fallback to Objects root if IndustrialSensors not found
-                    logger.warning("⚠ IndustrialSensors not found, browsing from Objects root...")
+                    # Fallback to Objects root if neither found
+                    logger.warning("⚠ IndustrialSensors and VendorModes not found, browsing from Objects root...")
                     await browse_node(objects_node, path="Objects")
                     logger.info(f"✓ Discovery complete: {len(variables)} variables found")
 
@@ -567,8 +593,8 @@ class OPCUAClient(ProtocolClient):
             status_code = data.monitored_item.Value.StatusCode.value if hasattr(data, 'monitored_item') else 0
             status = "Good" if status_code == 0 else f"Bad({status_code})"
 
-            # Get browse path (best effort)
-            browse_path = node_id_str
+            # Get browse path from stored mapping (fallback to node_id)
+            browse_path = self._node_paths.get(node_id_str, node_id_str)
 
             # Check if normalization is enabled
             if self._normalizer:

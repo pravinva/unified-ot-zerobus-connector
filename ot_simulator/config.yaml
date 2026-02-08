@@ -49,27 +49,15 @@ opcua:
   # Update frequency
   update_rate_hz: 2.0  # Updates per second (default 2 Hz)
 
-  # Which industries to simulate (all 15 industries)
+  # Which industries to simulate (LIMITED: only mining, utilities, renewable_energy)
   industries:
     - mining
     - utilities
-    - manufacturing
-    - oil_gas
-    - aerospace
-    - space
-    - water_wastewater
-    - electric_power
-    - automotive
-    - chemical
-    - food_beverage
-    - pharmaceutical
-    - data_center
-    - smart_building
-    - agriculture
+    - renewable_energy
 
 # MQTT Publisher Configuration
 mqtt:
-  enabled: true
+  enabled: false  # DISABLED - OPC UA only
 
   # Broker settings (publish to external broker)
   broker:
@@ -103,27 +91,15 @@ mqtt:
   publish_rate_hz: 2.0  # Publications per second
   batch_publish: false  # Publish all at once vs individual
 
-  # Which industries to simulate (all 15 industries)
+  # Which industries to simulate (LIMITED: only mining, utilities, renewable_energy)
   industries:
     - mining
     - utilities
-    - manufacturing
-    - oil_gas
-    - aerospace
-    - space
-    - water_wastewater
-    - electric_power
-    - automotive
-    - chemical
-    - food_beverage
-    - pharmaceutical
-    - data_center
-    - smart_building
-    - agriculture
+    - renewable_energy
 
 # Modbus Server Configuration
 modbus:
-  enabled: true
+  enabled: false  # DISABLED - OPC UA only
 
   # TCP Server
   tcp:
@@ -174,7 +150,7 @@ modbus:
       start_address: 6000
       count: 1000
       type: "holding"
-    electric_power:
+    renewable_energy:
       start_address: 7000
       count: 1000
       type: "holding"
@@ -215,23 +191,11 @@ modbus:
   # Update settings
   update_rate_hz: 2.0
 
-  # Which industries to simulate (all 15 industries)
+  # Which industries to simulate (LIMITED: only mining, utilities, renewable_energy)
   industries:
     - mining
     - utilities
-    - manufacturing
-    - oil_gas
-    - aerospace
-    - space
-    - water_wastewater
-    - electric_power
-    - automotive
-    - chemical
-    - food_beverage
-    - pharmaceutical
-    - data_center
-    - smart_building
-    - agriculture
+    - renewable_energy
 
 # Industry-Specific Sensor Configurations
 # These can override defaults from sensor_models.py
@@ -243,21 +207,52 @@ sensors:
     anomaly_magnitude: 2.0      # Multiplier for anomalies
     noise_multiplier: 1.0       # Scale noise (1.0 = default)
 
-  # Industry-specific overrides (optional)
+  # Industry-specific overrides (LIMITED: only mining, utilities, renewable_energy enabled)
   mining:
     enabled: true
-    # Example: disable specific sensors
-    # disabled_sensors:
-    #   - "conveyor_belt_2_speed"
 
   utilities:
     enabled: true
 
-  manufacturing:
+  renewable_energy:
     enabled: true
 
+  # DISABLED industries
+  manufacturing:
+    enabled: false
+
   oil_gas:
-    enabled: true
+    enabled: false
+
+  aerospace:
+    enabled: false
+
+  space:
+    enabled: false
+
+  water_wastewater:
+    enabled: false
+
+  automotive:
+    enabled: false
+
+  chemical:
+    enabled: false
+
+  food_beverage:
+    enabled: false
+
+  pharmaceutical:
+    enabled: false
+
+  data_center:
+    enabled: false
+
+  smart_building:
+    enabled: false
+
+  agriculture:
+    enabled: false
 
 # Fault Injection Configuration
 faults:

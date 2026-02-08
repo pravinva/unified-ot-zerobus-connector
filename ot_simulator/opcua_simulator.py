@@ -65,6 +65,7 @@ class OPCUASimulator:
         self.server: Server | None = None
         self.simulators: dict[str, SensorSimulator] = {}
         self.nodes: dict[str, Node] = {}
+        self.vendor_node_simulators: dict[str, SensorSimulator] = {}  # Map vendor node keys to simulators
         self._running = False
         self._server_task = None
         self._initialized = False  # Track if init() completed successfully
@@ -366,48 +367,65 @@ class OPCUASimulator:
 
     async def _create_kepware_nodes(self, idx: int, parent: Node, mode):
         """Create Kepware Channel.Device.Tag structure."""
+        # Check for node limit in config
+        node_limit = mode.config.settings.get('opcua_node_limit') if hasattr(mode.config, 'settings') else None
+        if not node_limit and hasattr(mode.config, 'opcua_node_limit'):
+            node_limit = mode.config.opcua_node_limit
+
         # Get channels from mode
         channels = getattr(mode, 'channels', {})
 
+        total_nodes_created = 0
+        limit_reached = False
+
         for channel_name, channel_obj in channels.items():
+            if limit_reached:
+                break
+
             channel_node = await parent.add_object(idx, channel_name)
 
             # Get devices in this channel (channel_obj is KepwareChannel dataclass)
             devices = getattr(channel_obj, 'devices', [])
             for device_obj in devices:
+                if limit_reached:
+                    break
+
                 device_name = device_obj.name
                 device_node = await channel_node.add_object(idx, device_name)
 
-                # Get sensors for this device (device_obj is KepwareDevice dataclass)
-                sensors = getattr(device_obj, 'sensors', [])
-                for sensor_name in sensors:
-                    # sensor_name is just the sensor name, need to find full path
-                    full_sensor_path = None
-                    for path in self.simulators.keys():
-                        if path.endswith('/' + sensor_name):
-                            full_sensor_path = path
-                            break
+                # CHANGED: Instead of only iterating through device_obj.sensors,
+                # iterate through ALL simulators to match MQTT behavior
+                for sensor_path, simulator in self.simulators.items():
+                    # Check node limit
+                    if node_limit and total_nodes_created >= node_limit:
+                        limit_reached = True
+                        break
+                    # Extract sensor name from path (e.g., "mining/crusher_1_motor_power" -> "crusher_1_motor_power")
+                    sensor_name = sensor_path.split('/')[-1]
 
-                    if full_sensor_path and full_sensor_path in self.simulators:
-                        simulator = self.simulators[full_sensor_path]
+                    # Get tag name (CamelCase conversion)
+                    tag_name = ''.join(word.capitalize() for word in sensor_name.split('_'))
 
-                        # Get tag name (CamelCase conversion)
-                        tag_name = ''.join(word.capitalize() for word in sensor_name.split('_'))
+                    # Create tag node
+                    tag_node = await device_node.add_variable(
+                        idx,
+                        tag_name,
+                        simulator.get_value(),
+                        varianttype=ua.VariantType.Double,
+                    )
+                    await tag_node.set_writable()
 
-                        # Create tag node
-                        tag_node = await device_node.add_variable(
-                            idx,
-                            tag_name,
-                            simulator.get_value(),
-                            varianttype=ua.VariantType.Double,
-                        )
-                        await tag_node.set_writable()
+                    # Store with vendor-specific path
+                    vendor_path = f"vendor_kepware_{channel_name}_{device_name}_{tag_name}"
+                    self.nodes[vendor_path] = tag_node
+                    # Store simulator mapping so update loop can update vendor nodes
+                    self.vendor_node_simulators[vendor_path] = simulator
 
-                        # Store with vendor-specific path
-                        vendor_path = f"vendor_kepware_{channel_name}_{device_name}_{tag_name}"
-                        self.nodes[vendor_path] = tag_node
+                    total_nodes_created += 1
 
-        logger.info(f"    Created Kepware structure: {len(channels)} channels")
+        total_nodes = len([k for k in self.nodes.keys() if k.startswith('vendor_kepware_')])
+        limit_msg = f" (limited to {node_limit})" if node_limit and limit_reached else ""
+        logger.info(f"    Created Kepware structure: {len(channels)} channels, {total_nodes} total nodes{limit_msg}")
 
     async def _create_sparkplug_nodes(self, idx: int, parent: Node, mode):
         """Create Sparkplug B Group/EdgeNode/Device structure."""
@@ -446,78 +464,93 @@ class OPCUASimulator:
                     # Store with vendor-specific path
                     vendor_path = f"vendor_sparkplug_{device_id}_{metric_name.replace('/', '_')}"
                     self.nodes[vendor_path] = metric_node
+                    # Store simulator mapping so update loop can update vendor nodes
+                    self.vendor_node_simulators[vendor_path] = simulator
 
         logger.info(f"    Created Sparkplug B structure: {len(devices)} devices")
 
     async def _create_honeywell_nodes(self, idx: int, parent: Node, mode):
         """Create Honeywell Experion Server.Module.Point structure with composite attributes."""
+        # Check for node limit in config
+        node_limit = mode.config.settings.get('opcua_node_limit') if hasattr(mode.config, 'settings') else None
+        if not node_limit and hasattr(mode.config, 'opcua_node_limit'):
+            node_limit = mode.config.opcua_node_limit
+
         server_name = getattr(mode, 'server_name', 'EXPERION_PKS')
         server_node = await parent.add_object(idx, server_name)
 
         # Get modules (dict of module_name -> ExperionModule dataclass)
         modules = getattr(mode, 'modules', {})
+
+        total_nodes_created = 0
+        limit_reached = False
+
         for module_name, module_obj in modules.items():
+            if limit_reached:
+                break
+
             module_node = await server_node.add_object(idx, module_name)
 
-            # Get points from the module dataclass (list of CompositePoint objects)
-            points = getattr(module_obj, 'points', [])
-            for point_obj in points:
-                # point_obj is a CompositePoint dataclass
-                sensor_name = getattr(point_obj, 'sensor_name', None)
-                if not sensor_name:
-                    continue
+            # CHANGED: Instead of only iterating through module_obj.points,
+            # iterate through ALL simulators to match MQTT behavior
+            for sensor_path, simulator in self.simulators.items():
+                if limit_reached:
+                    break
 
-                # Find the full sensor path (e.g., "mining/crusher_1_motor_power")
-                sensor_path = None
-                for path in self.simulators.keys():
-                    if path.endswith('/' + sensor_name):
-                        sensor_path = path
-                        break
+                # Check node limit
+                if node_limit and total_nodes_created >= node_limit:
+                    limit_reached = True
+                    break
+                # Extract sensor name from path (e.g., "mining/crusher_1_motor_power" -> "crusher_1_motor_power")
+                sensor_name = sensor_path.split('/')[-1]
 
-                if sensor_path and sensor_path in self.simulators:
-                    simulator = self.simulators[sensor_path]
+                # Create Honeywell-style point name (uppercase with underscores)
+                point_name = sensor_name.upper()
 
-                    # Get the point name from the CompositePoint object
-                    point_name = getattr(point_obj, 'name', sensor_name.upper())
+                # Create point folder
+                point_node = await module_node.add_object(idx, point_name)
 
-                    # Create point folder
-                    point_node = await module_node.add_object(idx, point_name)
+                # Create composite attributes (PV, PVEUHI, PVEULO, etc.)
+                value = simulator.get_value()
+                config = simulator.config
 
-                    # Create composite attributes (PV, PVEUHI, PVEULO, etc.)
-                    value = simulator.get_value()
-                    config = simulator.config
+                # PV (Process Value)
+                pv_node = await point_node.add_variable(
+                    idx, "PV", value, varianttype=ua.VariantType.Double
+                )
+                await pv_node.set_writable()
 
-                    # PV (Process Value)
-                    pv_node = await point_node.add_variable(
-                        idx, "PV", value, varianttype=ua.VariantType.Double
-                    )
-                    await pv_node.set_writable()
+                # PVEUHI (Engineering Units High)
+                await point_node.add_variable(
+                    idx, "PVEUHI", config.max_value, varianttype=ua.VariantType.Double
+                )
 
-                    # PVEUHI (Engineering Units High)
-                    await point_node.add_variable(
-                        idx, "PVEUHI", config.max_value, varianttype=ua.VariantType.Double
-                    )
+                # PVEULO (Engineering Units Low)
+                await point_node.add_variable(
+                    idx, "PVEULO", config.min_value, varianttype=ua.VariantType.Double
+                )
 
-                    # PVEULO (Engineering Units Low)
-                    await point_node.add_variable(
-                        idx, "PVEULO", config.min_value, varianttype=ua.VariantType.Double
-                    )
+                # PVUNITS (Engineering Units)
+                await point_node.add_variable(
+                    idx, "PVUNITS", config.unit, varianttype=ua.VariantType.String
+                )
 
-                    # PVUNITS (Engineering Units)
-                    await point_node.add_variable(
-                        idx, "PVUNITS", config.unit, varianttype=ua.VariantType.String
-                    )
+                # PVBAD (Bad quality flag)
+                await point_node.add_variable(
+                    idx, "PVBAD", False, varianttype=ua.VariantType.Boolean
+                )
 
-                    # PVBAD (Bad quality flag)
-                    await point_node.add_variable(
-                        idx, "PVBAD", False, varianttype=ua.VariantType.Boolean
-                    )
+                # Store PV node for updates
+                vendor_path = f"vendor_honeywell_{module_name}_{point_name}_PV"
+                self.nodes[vendor_path] = pv_node
+                # Store simulator mapping so update loop can update vendor nodes
+                self.vendor_node_simulators[vendor_path] = simulator
 
-                    # Store PV node for updates
-                    vendor_path = f"vendor_honeywell_{module_name}_{point_name}_PV"
-                    self.nodes[vendor_path] = pv_node
+                total_nodes_created += 1
 
-        logger.info(f"    Created Honeywell structure: {len(modules)} modules")
+        total_nodes = len([k for k in self.nodes.keys() if k.startswith('vendor_honeywell_')])
+        limit_msg = f" (limited to {node_limit})" if node_limit and limit_reached else ""
+        logger.info(f"    Created Honeywell structure: {len(modules)} modules, {total_nodes} total nodes{limit_msg}")
 
     async def _create_generic_nodes(self, idx: int, parent: Node, mode):
         """Create Generic vendor mode structure (simple flat structure)."""
@@ -542,6 +575,8 @@ class OPCUASimulator:
                     # Store with vendor-specific path
                     vendor_path = f"vendor_generic_{industry_name}_{sensor_name}"
                     self.nodes[vendor_path] = sensor_node
+                    # Store simulator mapping so update loop can update vendor nodes
+                    self.vendor_node_simulators[vendor_path] = simulator
 
         logger.info(f"    Created Generic structure for {len(self.industries)} industries")
 
@@ -560,7 +595,8 @@ class OPCUASimulator:
                 logger.info("Server will still be accessible via direct endpoint connection")
 
             # Log once that update loop started
-            logger.info(f"Starting sensor value update loop (2 Hz) for {len(self.simulators)} sensors...")
+            total_nodes = len(self.simulators) + len(self.vendor_node_simulators)
+            logger.info(f"Starting sensor value update loop (2 Hz) for {len(self.simulators)} sensors + {len(self.vendor_node_simulators)} vendor nodes = {total_nodes} total nodes...")
 
             try:
                 iteration_count = 0
@@ -587,6 +623,15 @@ class OPCUASimulator:
                             new_value = float(new_value)
                             node = self.nodes[path]
                             await node.write_value(new_value)
+
+                    # Update vendor mode nodes with same values
+                    for vendor_path, simulator in self.vendor_node_simulators.items():
+                        # Use the same value from the simulator (already updated above)
+                        new_value = simulator.get_value()
+                        if new_value is not None:
+                            new_value = float(new_value)
+                            vendor_node = self.nodes[vendor_path]
+                            await vendor_node.write_value(new_value)
 
                             # Capture message for live inspector - sample to avoid flooding buffer
                             if self.vendor_integration and len(self.simulators) > 0:
@@ -702,6 +747,7 @@ class OPCUASimulator:
         # Clear existing nodes and simulators
         self.nodes.clear()
         self.simulators.clear()
+        self.vendor_node_simulators.clear()
 
         # Re-run initialization (will detect PLC manager and use PLC mode)
         self._initialized = False

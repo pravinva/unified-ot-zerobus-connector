@@ -864,7 +864,7 @@ class WebServer:
       <div class="card collapsible" style="grid-column: 1 / -1">
         <div class="card-header">
           <h2>ZeroBus</h2>
-          <div class="hint">Roomy config editor (host, endpoint, catalog.schema.table, client id/secret)</div>
+          <div class="hint">ZeroBus configuration</div>
           <button class="iconbtn" type="button" data-toggle="collapse" data-target="#zerobusBody" aria-label="Toggle ZeroBus">▾</button>
         </div>
         <div id="zerobusBody" class="card-body" style="display:none">
@@ -1042,7 +1042,7 @@ class WebServer:
         </div>
       </div>
 
-      <div class="card collapsible">
+      <div class="card collapsible" style="grid-column: 1 / -1">
         <div class="card-header">
           <h2>Status</h2>
           <div class="hint">Live connector state</div>
@@ -1056,7 +1056,7 @@ class WebServer:
         </div>
       </div>
 
-      <div class="card collapsible">
+      <div class="card collapsible" style="grid-column: 1 / -1">
         <div class="card-header">
           <h2>Metrics</h2>
           <div class="hint">Counters & performance</div>

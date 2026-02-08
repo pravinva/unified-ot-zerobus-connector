@@ -1779,6 +1779,36 @@ def get_styles_html() -> str:
             transform: translateX(22px);
         }
 
+        /* Protocol Toggle Buttons */
+        .protocol-toggle-btn {
+            padding: 6px 12px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.6);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            transition: all 0.2s;
+        }
+
+        .protocol-toggle-btn.enabled {
+            background: #10B981;
+            color: white;
+            border-color: #10B981;
+        }
+
+        .protocol-toggle-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .protocol-toggle-btn.enabled:hover {
+            background: #0EA573;
+        }
+
         /* Mode Panels */
         .mode-panel {
             display: none;
@@ -2884,6 +2914,16 @@ def get_body_html() -> str:
                                 <div class="mode-card-stat-value" id="stat-kepware-tags">0</div>
                             </div>
                         </div>
+                        <div class="protocol-toggles" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1);">
+                            <div style="display: flex; gap: 10px; justify-content: center;">
+                                <button class="protocol-toggle-btn" id="toggle-kepware-opcua" onclick="event.stopPropagation(); toggleProtocol('kepware', 'opcua')" title="Toggle OPC UA">
+                                    OPC UA
+                                </button>
+                                <button class="protocol-toggle-btn" id="toggle-kepware-mqtt" onclick="event.stopPropagation(); toggleProtocol('kepware', 'mqtt')" title="Toggle MQTT">
+                                    MQTT
+                                </button>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Sparkplug B Mode Card -->
@@ -2938,6 +2978,16 @@ def get_body_html() -> str:
                             <div class="mode-card-stat">
                                 <div class="mode-card-stat-label">Controllers</div>
                                 <div class="mode-card-stat-value" id="stat-honeywell-controllers">0</div>
+                            </div>
+                        </div>
+                        <div class="protocol-toggles" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1);">
+                            <div style="display: flex; gap: 10px; justify-content: center;">
+                                <button class="protocol-toggle-btn" id="toggle-honeywell-opcua" onclick="event.stopPropagation(); toggleProtocol('honeywell', 'opcua')" title="Toggle OPC UA">
+                                    OPC UA
+                                </button>
+                                <button class="protocol-toggle-btn" id="toggle-honeywell-mqtt" onclick="event.stopPropagation(); toggleProtocol('honeywell', 'mqtt')" title="Toggle MQTT">
+                                    MQTT
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -6452,6 +6502,40 @@ def get_scripts_html() -> str:
             }
         }
 
+        // Toggle protocol (OPC UA or MQTT) for a vendor mode
+        async function toggleProtocol(modeName, protocol) {
+            try {
+                // Get current state
+                const toggleButton = document.getElementById(`toggle-${modeName}-${protocol}`);
+                const currentlyEnabled = toggleButton.classList.contains('enabled');
+                const newState = !currentlyEnabled;
+
+                const response = await fetch(`/api/modes/${modeName}/protocol/toggle`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ protocol: protocol, enabled: newState })
+                });
+
+                if (!response.ok) {
+                    console.error(`Failed to toggle ${protocol} for ${modeName}`);
+                    return;
+                }
+
+                const data = await response.json();
+                console.log('Protocol toggled:', modeName, protocol, data);
+
+                // Update button state
+                if (newState) {
+                    toggleButton.classList.add('enabled');
+                } else {
+                    toggleButton.classList.remove('enabled');
+                }
+
+            } catch (error) {
+                console.error('Error toggling protocol:', error);
+            }
+        }
+
         // Refresh all vendor modes status
         async function refreshVendorModes() {
             try {
@@ -6506,6 +6590,25 @@ def get_scripts_html() -> str:
             const card = document.getElementById('mode-card-' + modeName);
             if (card) {
                 card.classList.toggle('disabled', !enabled);
+            }
+
+            // Update protocol toggle buttons
+            const config = modeData.config || {};
+            const opcuaToggle = document.getElementById(`toggle-${modeName}-opcua`);
+            if (opcuaToggle) {
+                if (config.opcua_enabled) {
+                    opcuaToggle.classList.add('enabled');
+                } else {
+                    opcuaToggle.classList.remove('enabled');
+                }
+            }
+            const mqttToggle = document.getElementById(`toggle-${modeName}-mqtt`);
+            if (mqttToggle) {
+                if (config.mqtt_enabled) {
+                    mqttToggle.classList.add('enabled');
+                } else {
+                    mqttToggle.classList.remove('enabled');
+                }
             }
 
             // Update mode-specific stats if available

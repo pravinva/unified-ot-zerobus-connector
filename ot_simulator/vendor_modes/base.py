@@ -42,6 +42,7 @@ class ModeConfig:
     # Protocol settings
     opcua_enabled: bool = True
     opcua_port: Optional[int] = None
+    opcua_node_limit: Optional[int] = None  # Limit number of OPC UA nodes (for sampling/testing)
     mqtt_enabled: bool = True
     mqtt_topic_prefix: Optional[str] = None
 

@@ -87,6 +87,7 @@ class VendorModeIntegration:
                     enabled=mode_cfg.get("enabled", False),
                     opcua_enabled=mode_cfg.get("opcua_enabled", True),
                     opcua_port=mode_cfg.get("opcua_port"),
+                    opcua_node_limit=mode_cfg.get("opcua_node_limit"),  # Load node limit from config
                     mqtt_enabled=mode_cfg.get("mqtt_enabled", True),
                     mqtt_topic_prefix=mode_cfg.get("mqtt_topic_prefix"),
                     settings=mode_cfg.get("settings", {}),
@@ -111,15 +112,41 @@ class VendorModeIntegration:
             return {}
 
     async def _auto_register_sensors(self):
-        """Auto-register all existing sensors with enabled modes."""
+        """Auto-register all existing sensors with enabled modes.
+
+        Only registers sensors from enabled industries (from vendor modes config).
+        """
         logger.info("Auto-registering sensors with vendor modes...")
 
-        count = 0
-        for sensor_path, sensor in self.simulator_manager.sensor_instances.items():
-            await self.register_sensor(sensor_path, sensor)
-            count += 1
+        # Get enabled industries from vendor modes global config
+        global_config = self._get_global_config()
+        enabled_industries_list = global_config.get("enabled_industries", [])
+        enabled_industries = set(enabled_industries_list) if enabled_industries_list else set()
 
-        logger.info(f"Auto-registered {count} sensors with vendor modes")
+        if enabled_industries:
+            logger.info(f"Filtering sensors to enabled industries: {enabled_industries}")
+        else:
+            logger.info("No industry filter configured - registering all sensors")
+
+        count = 0
+        skipped = 0
+        for sensor_path, sensor in self.simulator_manager.sensor_instances.items():
+            # Parse industry from sensor path (e.g., "mining/crusher_1_motor_power" -> "mining")
+            parts = sensor_path.split("/")
+            if len(parts) >= 2:
+                industry = parts[0]
+
+                # Only register sensors from enabled industries
+                if not enabled_industries or industry in enabled_industries:
+                    await self.register_sensor(sensor_path, sensor)
+                    count += 1
+                else:
+                    skipped += 1
+            else:
+                # Invalid path format, skip
+                skipped += 1
+
+        logger.info(f"Auto-registered {count} sensors with vendor modes (skipped {skipped} from disabled industries)")
 
     async def register_sensor(
         self,
@@ -323,6 +350,10 @@ class VendorModeIntegration:
         """
         mode = self.mode_manager.get_mode(mode_type)
         if not mode:
+            return None
+
+        # Check if MQTT is enabled for this mode
+        if not mode.config.mqtt_enabled:
             return None
 
         # Parse sensor path

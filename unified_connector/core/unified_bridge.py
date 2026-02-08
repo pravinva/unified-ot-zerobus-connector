@@ -94,59 +94,16 @@ class UnifiedBridge:
         self.reconnect_max_delay_sec = 300.0
         self.reconnect_multiplier = 2.0
 
-        # Per-vendor pipeline stages - separate tracking for each vendor format
-        from collections import deque
-        self.vendor_pipelines = {
-            'kepware': {
-                'raw_protocol': deque(maxlen=3),
-                'after_vendor_detection': deque(maxlen=3),
-                'after_normalization': deque(maxlen=3),
-                'zerobus_batch': deque(maxlen=3),
-                'record_count': 0
-            },
-            'sparkplug_b': {
-                'raw_protocol': deque(maxlen=3),
-                'after_vendor_detection': deque(maxlen=3),
-                'after_normalization': deque(maxlen=3),
-                'zerobus_batch': deque(maxlen=3),
-                'record_count': 0
-            },
-            'honeywell': {
-                'raw_protocol': deque(maxlen=3),
-                'after_vendor_detection': deque(maxlen=3),
-                'after_normalization': deque(maxlen=3),
-                'zerobus_batch': deque(maxlen=3),
-                'record_count': 0
-            },
-            'opcua': {
-                'raw_protocol': deque(maxlen=3),
-                'after_vendor_detection': deque(maxlen=3),
-                'after_normalization': deque(maxlen=3),
-                'zerobus_batch': deque(maxlen=3),
-                'record_count': 0
-            },
-            'modbus': {
-                'raw_protocol': deque(maxlen=3),
-                'after_vendor_detection': deque(maxlen=3),
-                'after_normalization': deque(maxlen=3),
-                'zerobus_batch': deque(maxlen=3),
-                'record_count': 0
-            },
-            'generic': {
-                'raw_protocol': deque(maxlen=3),
-                'after_vendor_detection': deque(maxlen=3),
-                'after_normalization': deque(maxlen=3),
-                'zerobus_batch': deque(maxlen=3),
-                'record_count': 0
-            },
-            'unknown': {
-                'raw_protocol': deque(maxlen=3),
-                'after_vendor_detection': deque(maxlen=3),
-                'after_normalization': deque(maxlen=3),
-                'zerobus_batch': deque(maxlen=3),
-                'record_count': 0
-            }
-        }
+        # Per-protocol-vendor pipeline stages - separate tracking for each protocol+vendor combination
+        # This ensures OPC UA and MQTT samples don't compete for the same buffer slots
+        from collections import deque, defaultdict
+        self.vendor_pipelines = defaultdict(lambda: {
+            'raw_protocol': deque(maxlen=3),
+            'after_vendor_detection': deque(maxlen=3),
+            'after_normalization': deque(maxlen=3),
+            'zerobus_batch': deque(maxlen=3),
+            'record_count': 0
+        })
 
         # Metrics
         self.metrics = {
@@ -161,6 +118,8 @@ class UnifiedBridge:
                 'generic': 0,
                 'unknown': 0
             },
+            # Protocol-vendor breakdown: tracks vendor formats per source protocol
+            'protocol_vendor_breakdown': {},
             'records_enqueued': 0,
             'records_dropped': 0,
             'batches_sent': 0,
@@ -537,10 +496,32 @@ class UnifiedBridge:
         vendor_format = self._detect_vendor_format(record)
         self.metrics['vendor_formats'][vendor_format] += 1
 
-        # Increment per-vendor record count
-        self.vendor_pipelines[vendor_format]['record_count'] += 1
+        # Track protocol-vendor breakdown
+        # Extract protocol from record
+        if isinstance(record, dict):
+            protocol = record.get('protocol_type', record.get('protocol', 'unknown'))
+        else:
+            protocol_type = getattr(record, 'protocol_type', None)
+            protocol = protocol_type.value if hasattr(protocol_type, 'value') else str(protocol_type) if protocol_type else 'unknown'
 
-        # Stage 1: Capture raw protocol message (per-vendor)
+        # Initialize protocol entry if needed
+        if protocol not in self.metrics['protocol_vendor_breakdown']:
+            self.metrics['protocol_vendor_breakdown'][protocol] = {}
+
+        # Initialize vendor entry for this protocol if needed
+        if vendor_format not in self.metrics['protocol_vendor_breakdown'][protocol]:
+            self.metrics['protocol_vendor_breakdown'][protocol][vendor_format] = 0
+
+        # Increment protocol-vendor counter
+        self.metrics['protocol_vendor_breakdown'][protocol][vendor_format] += 1
+
+        # Create protocol-vendor key for separate buffering
+        protocol_vendor_key = f"{protocol}_{vendor_format}"
+
+        # Increment per-protocol-vendor record count
+        self.vendor_pipelines[protocol_vendor_key]['record_count'] += 1
+
+        # Stage 1: Capture raw protocol message (per-protocol-vendor)
         try:
             # Handle both ProtocolRecord objects and dict objects
             if isinstance(record, dict):
@@ -565,21 +546,22 @@ class UnifiedBridge:
                     'metadata': getattr(record, 'metadata', {}) or {},
                     'vendor_format': vendor_format
                 }
-            self.vendor_pipelines[vendor_format]['raw_protocol'].append(raw_message)
+            self.vendor_pipelines[protocol_vendor_key]['raw_protocol'].append(raw_message)
         except Exception as e:
             logger.error(f"[DEBUG] EXCEPTION in sample capture: {e}", exc_info=True)
 
         # Convert to dict using the record's to_dict method
         record_dict = record.to_dict()
 
-        # Add vendor format to record
+        # Add vendor format and protocol to record for downstream processing
         record_dict['vendor_format'] = vendor_format
+        record_dict['protocol'] = protocol  # Store protocol for zerobus_batch stage
 
-        # Stage 2: Capture after vendor detection (per-vendor)
+        # Stage 2: Capture after vendor detection (per-protocol-vendor)
         after_vendor = record_dict.copy()
         after_vendor['timestamp'] = time.time()
         after_vendor['stage'] = 'after_vendor_detection'
-        self.vendor_pipelines[vendor_format]['after_vendor_detection'].append(after_vendor)
+        self.vendor_pipelines[protocol_vendor_key]['after_vendor_detection'].append(after_vendor)
 
         # Stage 3: Apply normalization if enabled
         after_norm = record_dict.copy()
@@ -621,8 +603,8 @@ class UnifiedBridge:
             after_norm['normalized'] = False
             after_norm['normalized_reason'] = 'Normalization disabled'
 
-        # Capture normalization stage
-        self.vendor_pipelines[vendor_format]['after_normalization'].append(after_norm)
+        # Stage 3: Capture after normalization (per-protocol-vendor)
+        self.vendor_pipelines[protocol_vendor_key]['after_normalization'].append(after_norm)
 
         # Enqueue for ZeroBus
         # Fast-path: avoid creating a task per record (can starve the event loop).
@@ -703,13 +685,15 @@ class UnifiedBridge:
                         message = self._to_zerobus_message(record)
                         batch.append(message)
 
-                        # Capture ZeroBus batch stage sample (per-vendor)
+                        # Stage 4: Capture ZeroBus batch stage sample (per-protocol-vendor)
                         vendor_format = record.get('vendor_format', 'unknown')
+                        protocol = record.get('protocol', 'unknown')
+                        protocol_vendor_key = f"{protocol}_{vendor_format}"
+
                         zerobus_sample = message.copy()
                         zerobus_sample['timestamp'] = time.time()
                         zerobus_sample['stage'] = 'zerobus_batch'
-                        if vendor_format in self.vendor_pipelines:
-                            self.vendor_pipelines[vendor_format]['zerobus_batch'].append(zerobus_sample)
+                        self.vendor_pipelines[protocol_vendor_key]['zerobus_batch'].append(zerobus_sample)
 
                     else:
                         # Nothing to send; avoid a hot loop that starves the web UI
@@ -942,6 +926,7 @@ class UnifiedBridge:
         return {
             'vendor_pipelines': vendor_pipelines_data,
             'vendor_format_summary': self.metrics['vendor_formats'],
+            'protocol_vendor_breakdown': self.metrics['protocol_vendor_breakdown'],
             'total_records_received': self.metrics['records_received'],
             'normalization_enabled': self.normalization_enabled
         }

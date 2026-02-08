@@ -42,6 +42,7 @@ class VendorModeAPIRoutes:
         app.router.add_get("/api/modes", self.handle_list_modes)
         app.router.add_get("/api/modes/{mode_type}", self.handle_get_mode)
         app.router.add_post("/api/modes/{mode_type}/toggle", self.handle_toggle_mode)
+        app.router.add_post("/api/modes/{mode_type}/protocol/toggle", self.handle_toggle_protocol)
         app.router.add_get("/api/modes/{mode_type}/diagnostics", self.handle_get_diagnostics)
         app.router.add_get("/api/modes/{mode_type}/status", self.handle_get_mode_status)
 
@@ -255,6 +256,126 @@ class VendorModeAPIRoutes:
                 {"error": str(e)},
                 status=500
             )
+
+    async def handle_toggle_protocol(self, request: web.Request) -> web.Response:
+        """Toggle protocol (OPC UA or MQTT) for a specific vendor mode.
+
+        POST /api/modes/{mode_type}/protocol/toggle
+
+        Body:
+            {
+                "protocol": "opcua" or "mqtt",
+                "enabled": true/false
+            }
+
+        Returns:
+            {
+                "mode_type": "kepware",
+                "protocol": "opcua",
+                "enabled": true,
+                "message": "Protocol enabled successfully"
+            }
+        """
+        try:
+            mode_type_str = request.match_info["mode_type"]
+
+            try:
+                mode_type = VendorModeType(mode_type_str)
+            except ValueError:
+                return web.json_response(
+                    {"error": f"Invalid mode type: {mode_type_str}"},
+                    status=400
+                )
+
+            # Parse request body
+            try:
+                data = await request.json()
+            except json.JSONDecodeError:
+                return web.json_response(
+                    {"error": "Invalid JSON body"},
+                    status=400
+                )
+
+            protocol = data.get("protocol", "").lower()
+            enabled = data.get("enabled")
+
+            if protocol not in ["opcua", "mqtt"]:
+                return web.json_response(
+                    {"error": "protocol must be 'opcua' or 'mqtt'"},
+                    status=400
+                )
+
+            if enabled is None:
+                return web.json_response(
+                    {"error": "Missing 'enabled' field in request body"},
+                    status=400
+                )
+
+            # Get the mode
+            mode = self.vendor_integration.mode_manager.get_mode(mode_type)
+            if not mode:
+                return web.json_response(
+                    {"error": f"Mode {mode_type_str} not found"},
+                    status=404
+                )
+
+            # Update protocol setting
+            if protocol == "opcua":
+                mode.config.opcua_enabled = enabled
+            elif protocol == "mqtt":
+                mode.config.mqtt_enabled = enabled
+
+            # Update config file to persist the change
+            await self._update_vendor_config(mode_type, protocol, enabled)
+
+            message = f"{'Enabled' if enabled else 'Disabled'} {protocol.upper()} for {mode_type_str}"
+            logger.info(message)
+
+            return web.json_response({
+                "mode_type": mode_type_str,
+                "protocol": protocol,
+                "enabled": enabled,
+                "message": message,
+            })
+
+        except Exception as e:
+            logger.error(f"Error toggling protocol: {e}", exc_info=True)
+            return web.json_response(
+                {"error": str(e)},
+                status=500
+            )
+
+    async def _update_vendor_config(self, mode_type: VendorModeType, protocol: str, enabled: bool):
+        """Update vendor mode config file to persist protocol toggle."""
+        import yaml
+        from pathlib import Path
+
+        config_path = Path(__file__).parent / "config.yaml"
+
+        try:
+            # Read current config
+            with open(config_path, 'r') as f:
+                config = yaml.safe_load(f) or {}
+
+            # Update protocol setting
+            mode_key = mode_type.value
+            if mode_key not in config:
+                config[mode_key] = {}
+
+            if protocol == "opcua":
+                config[mode_key]["opcua_enabled"] = enabled
+            elif protocol == "mqtt":
+                config[mode_key]["mqtt_enabled"] = enabled
+
+            # Write back
+            with open(config_path, 'w') as f:
+                yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+
+            logger.info(f"Updated {config_path}: {mode_key}.{protocol}_enabled = {enabled}")
+
+        except Exception as e:
+            logger.error(f"Failed to update vendor config: {e}")
+            # Don't fail the request, just log the error
 
     async def handle_get_diagnostics(self, request: web.Request) -> web.Response:
         """Get diagnostics for a specific vendor mode.
