@@ -59,14 +59,14 @@ def validate_source_name(name: str) -> str:
     if len(name) > MAX_NAME_LENGTH:
         raise ValidationError(f"Source name too long (max {MAX_NAME_LENGTH} characters)")
 
+    # Check for path traversal attempts
+    if '..' in name or '/' in name or '\\' in name:
+        raise ValidationError("Source name cannot contain path traversal sequences")
+
     if not SAFE_NAME_PATTERN.match(name):
         raise ValidationError(
             "Source name can only contain letters, numbers, hyphens, underscores, and periods"
         )
-
-    # Check for path traversal attempts
-    if '..' in name or '/' in name or '\\' in name:
-        raise ValidationError("Source name cannot contain path traversal sequences")
 
     logger.debug(f"Validated source name: {name}")
     return name
@@ -123,11 +123,17 @@ def validate_endpoint(endpoint: str) -> str:
     if not URL_PATTERN.match(endpoint):
         raise ValidationError("Invalid endpoint URL format")
 
+    # Reject path traversal sequences anywhere in the URL
+    # (e.g. http://host/../../../etc/passwd)
+    if ".." in endpoint:
+        raise ValidationError("Endpoint contains path traversal sequence")
+
     # Check for suspicious patterns
     suspicious_patterns = [
         r'[;&|`$]',  # Command injection
         r'\$\{',      # Variable expansion
-        r'\.\.//',    # Path traversal
+        r'\.\./',     # Path traversal
+        r'\.\.\\',    # Path traversal (windows-style)
         r'file://',   # Local file access
         r'javascript:', # XSS
     ]

@@ -305,27 +305,34 @@ class OPCUAClient(ProtocolClient):
                 pass
             self._poll_targets.append((var_node, node_id, browse_path))
 
+        # IMPORTANT:
+        # `UnifiedBridge` expects `subscribe()` to be a long-running coroutine.
+        # If we spawn a background task and return immediately, lifecycle management can't
+        # observe failures and reconnect, and read errors can be silently swallowed.
         if self.polling_mode:
             # POLLING MODE: Actively read all values at regular intervals
-            # This bypasses deadband filtering issues
-            logger.info(f"🔄 Starting POLLING MODE with {len(self._variables)} variables at {self.polling_interval_ms}ms intervals")
-            # Start poll loop in background
-            self._poll_task = asyncio.create_task(self._poll_loop())
+            # This bypasses server deadband filtering issues
+            logger.info(
+                f"🔄 Starting POLLING MODE with {len(self._variables)} variables at {self.polling_interval_ms}ms intervals"
+            )
+            await self._poll_loop()
         else:
             # SUBSCRIPTION MODE: Use OPC-UA data-change notifications
             # Note: May be affected by server deadband filtering
             logger.info(f"🔔 Starting SUBSCRIPTION MODE with {len(self._variables)} variables")
-            # Start subscription loop in background
-            self._subscription_task = asyncio.create_task(self._subscription_loop())
+            await self._subscription_loop()
 
     async def _poll_loop(self) -> None:
         """Poll all variables at regular intervals."""
         logger.info(f"✓ Polling {len(self._variables)} variables every {self.polling_interval_ms}ms")
 
         poll_count = 0
+        consecutive_zero_polls = 0
         while not self._stop_evt.is_set():
             poll_start = time.time()
             records_sent = 0
+            errors = 0
+            first_error: str | None = None
 
             # Read values concurrently in small batches to avoid blocking the event loop
             batch_size = 25
@@ -346,7 +353,10 @@ class OPCUAClient(ProtocolClient):
 
                 for node_id, browse_path, data_value, err in results:
                     if err is not None:
-                        # keep log noise low
+                        errors += 1
+                        if first_error is None:
+                            first_error = f"{type(err).__name__}: {err}"
+                        # keep log noise low (we summarize periodically + on repeated total failure)
                         continue
 
                     record = ProtocolRecord(
@@ -368,7 +378,25 @@ class OPCUAClient(ProtocolClient):
                 await asyncio.sleep(0)
             poll_count += 1
             if poll_count % 10 == 0:  # Log every 10 polls
-                logger.info(f"Poll #{poll_count}: Sent {records_sent} records (total variables: {len(self._variables)})")
+                if errors > 0:
+                    logger.info(
+                        f"Poll #{poll_count}: Sent {records_sent} records "
+                        f"(total variables: {len(self._variables)}, errors: {errors}, first_error: {first_error})"
+                    )
+                else:
+                    logger.info(f"Poll #{poll_count}: Sent {records_sent} records (total variables: {len(self._variables)})")
+
+            # If we get repeated total failure (0 successful reads), force reconnect by raising.
+            # This fixes the "Poll: Sent 0 records forever" wedge (e.g., session invalid, connection closed, stale nodes).
+            if records_sent == 0:
+                consecutive_zero_polls += 1
+                if consecutive_zero_polls >= 3:
+                    raise RuntimeError(
+                        f"OPC-UA polling returned 0/{len(self._variables)} values for {consecutive_zero_polls} polls; "
+                        f"forcing reconnect (last_error={first_error})"
+                    )
+            else:
+                consecutive_zero_polls = 0
 
             # Calculate sleep time to maintain polling interval
             poll_duration = (time.time() - poll_start) * 1000  # ms

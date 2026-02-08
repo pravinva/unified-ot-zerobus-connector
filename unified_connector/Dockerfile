@@ -1,7 +1,7 @@
 # Unified OT Zerobus Connector Client - Production Container
 # Multi-stage build for minimal image size
 
-FROM python:3.11-slim as builder
+FROM python:3.12-slim as builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -18,8 +18,20 @@ ENV PATH="/opt/venv/bin:$PATH"
 COPY requirements.txt /tmp/
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
+# Frontend build stage (React Web UIs)
+FROM node:20-slim as frontend
+WORKDIR /app
+
+# Copy only webui workspace first for better caching
+COPY webui/package.json webui/package-lock.json webui/.npmrc /app/webui/
+COPY webui/apps /app/webui/apps
+COPY webui/packages /app/webui/packages
+
+# Install and build (outputs directly into backend static dirs via vite.config.ts outDir)
+RUN cd /app/webui && npm ci && npm run build
+
 # Final stage
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -40,6 +52,10 @@ WORKDIR /app
 
 # Copy application code
 COPY --chown=connector:connector . /app/
+
+# Copy built frontend assets into the image
+COPY --from=frontend --chown=connector:connector /app/unified_connector/web/static/connector-ui /app/unified_connector/web/static/connector-ui
+COPY --from=frontend --chown=connector:connector /app/ot_simulator/web_ui/static/simulator-ui /app/ot_simulator/web_ui/static/simulator-ui
 
 # Create directories for runtime data
 RUN mkdir -p /data/spool /data/logs && \

@@ -4,6 +4,27 @@ This repo contains:
 - **`unified_connector/`**: a multi-protocol edge connector (OPC-UA, MQTT, Modbus) with a lightweight Web UI, and streaming to Databricks via **ZeroBus**.
 - **`ot_simulator/`**: an OT data simulator you can use to generate sample OPC-UA/MQTT/Modbus data.
 
+## Python version (required)
+
+This repo is **Python 3.12 only**.
+
+- **Pinned** via `.python-version` (recommended for `pyenv` / `asdf`)
+- **Docker images** use `python:3.12-slim`
+
+### Local setup (Python 3.12)
+
+```bash
+python3.12 -m venv .venv312c
+source .venv312c/bin/activate
+pip install -r requirements.txt
+```
+
+### Run tests (Python 3.12)
+
+```bash
+.venv312c/bin/python -m pytest -q tests
+```
+
 ## NIS2 Directive Compliance
 
 ### What is NIS2?

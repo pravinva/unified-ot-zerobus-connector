@@ -1,5 +1,6 @@
 .venv/
 .venv312/
+.venv312c/
 __pycache__/
 *.pyc
 .pytest_cache/
@@ -16,6 +17,11 @@ venv/
 .unified_connector/
 spool/
 certs/
+
+# Built React WebUI assets (built via webui/ workspace)
+# NOTE: keep simulator UI build artifacts tracked so `app.yaml` deployments
+# can serve the React UI without running a Node build step.
+unified_connector/web/static/connector-ui/
 
 # Security certificates (self-signed for development)
 ot_simulator/certs/*.pem

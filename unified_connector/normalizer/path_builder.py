@@ -36,6 +36,10 @@ class TagPathBuilder:
             "mqtt": config.get("mqtt_patterns", {}),
         }
 
+        # Prevent log spam when templates don't match incoming identifiers.
+        # We warn once per missing component per protocol/template.
+        self._missing_component_warned: set[str] = set()
+
     def build_path(
         self,
         protocol: str,
@@ -69,7 +73,11 @@ class TagPathBuilder:
             try:
                 path = template.format(**components)
             except KeyError as e:
-                logger.warning(f"Missing component {e} for template, using fallback path")
+                missing = str(e).strip("'")
+                warn_key = f"{protocol_lower}:{missing}:{template}"
+                if warn_key not in self._missing_component_warned:
+                    self._missing_component_warned.add(warn_key)
+                    logger.warning(f"Missing component {e} for template, using fallback path")
                 path = self._build_fallback_path(protocol_lower, source_identifier, components)
 
             # Normalize the path

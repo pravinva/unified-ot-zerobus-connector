@@ -142,6 +142,7 @@ class WebServer:
             web.get('/health', self.health_check),
 
             # Static files (Web UI)
+            web.get('/legacy', self.serve_legacy_index),
             web.get('/', self.serve_index),
         ]
 
@@ -424,6 +425,7 @@ class WebServer:
         import os
         import socket
         from urllib.parse import urlparse
+        from unified_connector.core.credential_manager import CredentialManager
 
         deep = request.query.get('deep', '').lower() in ('1', 'true', 'yes')
 
@@ -443,14 +445,54 @@ class WebServer:
         def _has_value(v: object) -> bool:
             return isinstance(v, str) and bool(v.strip())
 
+        def _mask(v: object) -> str:
+            if not _has_value(v):
+                return ""
+            s = str(v).strip()
+            if len(s) <= 10:
+                return "***"
+            return f"{s[:4]}…{s[-4:]}"
+
+        def _cred_present(key: str) -> bool:
+            # Best-effort presence check for encrypted credential store.
+            try:
+                cm = CredentialManager()
+                val = cm.get_credential(key)
+                return _has_value(val)
+            except Exception:
+                return False
+
+        env_client_id = os.getenv("CONNECTOR_ZEROBUS_CLIENT_ID", "").strip()
+        env_client_secret = os.getenv("CONNECTOR_ZEROBUS_CLIENT_SECRET", "").strip()
+        client_id_val = auth.get("client_id", "")
+        client_secret_val = auth.get("client_secret", "")
+
+        client_id_source = (
+            "env"
+            if env_client_id
+            else "credential_store"
+            if _cred_present("zerobus.client_id")
+            else "config"
+        )
+        client_secret_source = (
+            "env"
+            if env_client_secret
+            else "credential_store"
+            if _cred_present("zerobus.client_secret")
+            else "config"
+        )
+
         result: dict[str, object] = {
             'enabled': bool(cfg.get('enabled', False)),
             'workspace_host': workspace_host or '',
             'zerobus_endpoint': zerobus_endpoint or '',
             'target_table': table,
             'auth': {
-                'client_id_present': _has_value(auth.get('client_id')),
-                'client_secret_present': _has_value(auth.get('client_secret')),
+                'client_id_present': _has_value(client_id_val),
+                'client_id_source': client_id_source,
+                'client_id_masked': _mask(client_id_val),
+                'client_secret_present': _has_value(client_secret_val),
+                'client_secret_source': client_secret_source,
             },
             'master_password_set': bool(os.getenv('CONNECTOR_MASTER_PASSWORD')),
             'checks': {},
@@ -740,20 +782,9 @@ class WebServer:
         """Health check endpoint."""
         return web.json_response({'status': 'healthy'})
 
-    async def serve_index(self, request: web.Request) -> web.Response:
-        """Serve web UI index page.
-
-        If authentication is enabled and user is not authenticated,
-        redirect to login page. Otherwise serve main UI.
-        """
-        # If auth is enabled, check if user is authenticated
-        if self.auth_manager:
-            user = request.get('user')
-            if not user:
-                # Not authenticated, redirect to login page
-                return web.HTTPFound('/static/login.html')
-
-        html = """
+    def _legacy_index_html(self) -> str:
+        # NOTE: Keep legacy HTML intact for parity/fallback at /legacy.
+        return """
 <!DOCTYPE html>
 <html>
 <head>
@@ -1102,7 +1133,34 @@ class WebServer:
   <script src="/static/app.js"></script>
 </body>
 </html>        """
-        return web.Response(text=html, content_type='text/html')
+    async def _auth_gate(self, request: web.Request) -> Optional[web.Response]:
+        """Return a redirect response if auth is enabled and user not authenticated."""
+        if self.auth_manager:
+            user = request.get('user')
+            if not user:
+                return web.HTTPFound('/static/login.html')
+        return None
+
+    async def serve_legacy_index(self, request: web.Request) -> web.Response:
+        """Serve legacy (vanilla JS) UI at /legacy."""
+        gated = await self._auth_gate(request)
+        if gated:
+            return gated
+        return web.Response(text=self._legacy_index_html(), content_type='text/html')
+
+    async def serve_index(self, request: web.Request) -> web.Response:
+        """Serve React UI at / (fallback to legacy if build missing)."""
+        gated = await self._auth_gate(request)
+        if gated:
+            return gated
+
+        # If React build exists, serve it. Otherwise fall back to legacy UI.
+        static_dir = Path(__file__).parent / "static" / "connector-ui"
+        index_file = static_dir / "index.html"
+        if index_file.exists():
+            return web.FileResponse(path=index_file)
+
+        return await self.serve_legacy_index(request)
 
     # Authentication Handlers (NIS2 compliance)
 

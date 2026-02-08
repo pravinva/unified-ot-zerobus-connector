@@ -5,6 +5,7 @@ This package contains the modular web interface components.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from aiohttp import web
@@ -120,6 +121,7 @@ class EnhancedWebUI:
 
     def _setup_routes(self):
         """Setup HTTP routes."""
+        self.app.router.add_get("/legacy", self.handle_legacy)
         self.app.router.add_get("/", self.handle_index)
         self.app.router.add_get("/api/health", self.api_handlers.handle_health)
         self.app.router.add_get("/api/sensors", self.api_handlers.handle_list_sensors)
@@ -151,8 +153,20 @@ class EnhancedWebUI:
         if self.vendor_mode_api:
             self.vendor_mode_api.setup_routes(self.app)
 
+        # Static assets for React UI (optional; legacy UI uses CDN resources)
+        static_dir = Path(__file__).parent / "static"
+        if static_dir.exists():
+            self.app.router.add_static("/static/", path=str(static_dir), name="static")
+
     async def handle_index(self, request: web.Request) -> web.Response:
-        """Serve enhanced professional UI with real-time charts and NLP."""
+        """Serve React UI at / (fallback to legacy if build missing)."""
+        index_file = Path(__file__).parent / "static" / "simulator-ui" / "index.html"
+        if index_file.exists():
+            return web.FileResponse(path=index_file)
+        return await self.handle_legacy(request)
+
+    async def handle_legacy(self, request: web.Request) -> web.Response:
+        """Serve legacy template UI at /legacy."""
         html = get_main_page_html()
         return web.Response(text=html, content_type="text/html")
 

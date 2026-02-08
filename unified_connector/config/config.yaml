@@ -15,14 +15,14 @@ web_ui:
     require_mfa: false
     oauth:
       provider: databricks
-      client_id: ${credential:oauth.client_id}
-      client_secret: ${credential:oauth.client_secret}
+      client_id: ''
+      client_secret: ''
       workspace_host: https://e2-demo-field-eng.cloud.databricks.com
       redirect_uri: http://localhost:8082/login/callback
       scopes:
       - all-apis
     session:
-      secret_key: ${credential:session.secret_key}
+      secret_key: ''
       max_age_seconds: 28800
       cookie_name: unified_connector_session
       secure: false
@@ -88,8 +88,9 @@ discovery:
     enabled: true
     default_port: 4840
     vendor_ports:
-      - 49320  # Kepware OPC UA port
-      - 4897   # Honeywell OPC UA port
+    - 4841
+    - 49320
+    - 4897
     timeout_sec: 5.0
   mqtt:
     enabled: true
@@ -108,21 +109,29 @@ sources:
   enabled: true
   security_mode: None
   normalization_enabled: true
-  subscription_mode: false  # FALSE = Use polling mode for continuous data
-  polling_interval_ms: 5000  # Poll every 5 seconds
-  variable_limit: 300  # 100 Kepware + 100 Honeywell + 67 standard + buffer
-  publishing_interval_ms: 1000  # Subscription publishing interval (for subscription mode)
+  subscription_mode: false
+  polling_interval_ms: 5000
+  variable_limit: 300
+  publishing_interval_ms: 1000
 - name: modbus-127-0-0-1-5020
   protocol: modbus
   endpoint: modbus://127.0.0.1:5020
-  enabled: false  # DISABLED - OPC UA only
+  enabled: false
   normalization_enabled: true
 - name: mqtt-127-0-0-1-1883
   protocol: mqtt
   endpoint: mqtt://127.0.0.1:1883
-  enabled: false  # DISABLED - OPC UA only
+  enabled: false
   normalization_enabled: true
   subscription_mode: true
+- name: opcua_127_0_0_1_4841
+  protocol: opcua
+  endpoint: opc.tcp://127.0.0.1:4841/ot-simulator/server/
+  enabled: true
+  site: ''
+  area: ''
+  line: ''
+  equipment: ''
 normalization:
   enabled: true
   path_template: '{site}/{area}/{line}/{equipment}/{signal_type}/{tag_name}'
@@ -168,8 +177,8 @@ zerobus:
     schema: scada_data
     table: opcua_events_bronze
   auth:
-    client_id: YOUR_CLIENT_ID_HERE
-    client_secret: YOUR_CLIENT_SECRET_HERE
+    client_id: ${credential:zerobus.client_id}
+    client_secret: ${credential:zerobus.client_secret}
   batch:
     max_records: 1000
     timeout_seconds: 5.0
