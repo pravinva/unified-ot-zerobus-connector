@@ -420,6 +420,50 @@ The Web UI provides six main tabs for comprehensive simulator management:
   - Restart with new configuration
   - View protocol-specific logs
 
+**Understanding Protocol Controls:**
+
+The simulator has two levels of protocol control:
+
+1. **Main Protocol Start/Stop Buttons** (Overview & Protocols Tab)
+   - Controls the protocol **server process** itself
+   - Starts/stops the entire OPC UA server, MQTT broker, or Modbus server
+   - Required first step before any data can flow
+   - Example: "Start MQTT" launches the MQTT broker on port 1883
+
+2. **Vendor Mode Protocol Toggles** (Vendor Modes Tab)
+   - Controls whether **vendor-specific data** is published on an already-running protocol
+   - Enables/disables data flow for specific vendor formats (Kepware, Honeywell, etc.)
+   - Only works if the protocol server is already running
+   - Example: Toggle "MQTT" ON for Kepware enables Kepware-formatted messages to MQTT
+
+**Workflow Example:**
+```
+1. Overview Tab: Click "Start MQTT"
+   → MQTT broker starts on port 1883
+
+2. Vendor Modes Tab: Toggle "MQTT" ON for Kepware
+   → Kepware-formatted messages start publishing to MQTT
+
+3. Vendor Modes Tab: Toggle "MQTT" OFF for Kepware
+   → Kepware messages stop, but MQTT broker still running
+
+4. Vendor Modes Tab: Toggle "MQTT" ON for Honeywell
+   → Honeywell-formatted messages start publishing
+
+5. Overview Tab: Click "Stop MQTT"
+   → MQTT broker stops completely, no messages from any vendor
+```
+
+**Key Differences:**
+
+| Aspect | Main Page Start/Stop | Vendor Toggle |
+|--------|---------------------|---------------|
+| **Controls** | Protocol server process | Vendor data flow |
+| **Scope** | Entire protocol | Specific vendor format |
+| **Effect** | Starts/stops server | Enables/disables publishing |
+| **Example** | Starts OPC UA server on port 4840 | Enables Kepware nodes in OPC UA tree |
+| **Required First** | ✅ Yes - server must run | Depends on server running |
+
 #### 5. Modes Tab (NEW)
 
 **Vendor-specific output mode management:**
