@@ -1,8 +1,16 @@
 import { Button, Field, Panel, Select, TextInput } from "@ot/ui-kit";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { simApi } from "../api/simApi";
-import type { Protocol, ZeroBusStatusResponse } from "../api/types";
+import type { Protocol, SensorsResponse, ZeroBusStatusResponse } from "../api/types";
 import { useAppToast } from "../toast/ToastContext";
+
+type SensorItem = {
+  path: string;
+  name: string;
+  type: string;
+  industryDisplay: string;
+  plc: string;
+};
 
 export function ZeroBusPage() {
   const toast = useAppToast();
@@ -10,7 +18,12 @@ export function ZeroBusPage() {
   const [status, setStatus] = useState<ZeroBusStatusResponse | null>(null);
   const [cfgLoading, setCfgLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [sensorLoading, setSensorLoading] = useState(false);
   const [config, setConfig] = useState<any>({});
+  const [sensorsByIndustry, setSensorsByIndustry] = useState<SensorsResponse | null>(null);
+  const [selectedSensors, setSelectedSensors] = useState<Set<string>>(new Set());
+  const [industryFilters, setIndustryFilters] = useState<Set<string>>(new Set());
+  const [plcFilters, setPlcFilters] = useState<Set<string>>(new Set());
   const [lastResult, setLastResult] = useState<string>("");
 
   function parseFqn(fqn: string): { catalog: string; schema: string; table: string } | null {
@@ -47,12 +60,28 @@ export function ZeroBusPage() {
     }
   }, [toast]);
 
+  const loadSensors = useCallback(async () => {
+    setSensorLoading(true);
+    try {
+      const sensors = await simApi.getSensors();
+      setSensorsByIndustry(sensors);
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : "Failed to load sensors", "bad");
+    } finally {
+      setSensorLoading(false);
+    }
+  }, [toast]);
+
   const loadConfig = useCallback(async () => {
     setCfgLoading(true);
     try {
       const res = await simApi.loadZeroBusConfig(protocol);
       if ((res as any)?.success) {
         setConfig((res as any).config ?? {});
+        const loadedSelected = Array.isArray((res as any)?.config?.selected_sensors)
+          ? (res as any).config.selected_sensors
+          : [];
+        setSelectedSensors(new Set(loadedSelected));
         setLastResult("Loaded saved config");
         toast.show("Loaded saved config", "ok");
       } else {
@@ -68,9 +97,94 @@ export function ZeroBusPage() {
 
   useEffect(() => {
     refreshStatus().catch(() => {});
+    loadSensors().catch(() => {});
     loadConfig().catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [protocol]);
+
+  useEffect(() => {
+    setConfig((c: any) => ({ ...c, selected_sensors: Array.from(selectedSensors) }));
+  }, [selectedSensors]);
+
+  const allSensors = useMemo<SensorItem[]>(() => {
+    if (!sensorsByIndustry) return [];
+    const flat: SensorItem[] = [];
+    for (const industry of Object.values(sensorsByIndustry)) {
+      const industryDisplay = String(industry.display_name ?? industry.name ?? "Unknown");
+      for (const sensor of industry.sensors ?? []) {
+        const plcVendor = String((sensor as any).plc_vendor ?? "").trim();
+        const plcModel = String((sensor as any).plc_model ?? "").trim();
+        const plc = `${plcVendor} ${plcModel}`.trim() || "Unknown PLC";
+        flat.push({
+          path: String((sensor as any).path ?? ""),
+          name: String((sensor as any).name ?? ""),
+          type: String((sensor as any).type ?? "unknown"),
+          industryDisplay,
+          plc,
+        });
+      }
+    }
+    return flat.filter((s) => s.path.length > 0);
+  }, [sensorsByIndustry]);
+
+  const industryOptions = useMemo(() => {
+    return Array.from(new Set(allSensors.map((s) => s.industryDisplay))).sort((a, b) => a.localeCompare(b));
+  }, [allSensors]);
+
+  const plcOptions = useMemo(() => {
+    return Array.from(new Set(allSensors.map((s) => s.plc))).sort((a, b) => a.localeCompare(b));
+  }, [allSensors]);
+
+  const filteredSensors = useMemo(() => {
+    return allSensors.filter((sensor) => {
+      if (industryFilters.size > 0 && !industryFilters.has(sensor.industryDisplay)) return false;
+      if (plcFilters.size > 0 && !plcFilters.has(sensor.plc)) return false;
+      return true;
+    });
+  }, [allSensors, industryFilters, plcFilters]);
+
+  const toggleIndustryFilter = useCallback((industry: string, checked: boolean) => {
+    setIndustryFilters((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(industry);
+      else next.delete(industry);
+      return next;
+    });
+  }, []);
+
+  const togglePlcFilter = useCallback((plc: string, checked: boolean) => {
+    setPlcFilters((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(plc);
+      else next.delete(plc);
+      return next;
+    });
+  }, []);
+
+  const toggleSensorSelection = useCallback((path: string, checked: boolean) => {
+    setSelectedSensors((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(path);
+      else next.delete(path);
+      return next;
+    });
+  }, []);
+
+  const selectFilteredSensors = useCallback(() => {
+    setSelectedSensors((prev) => {
+      const next = new Set(prev);
+      for (const sensor of filteredSensors) next.add(sensor.path);
+      return next;
+    });
+  }, [filteredSensors]);
+
+  const clearFilteredSensors = useCallback(() => {
+    setSelectedSensors((prev) => {
+      const next = new Set(prev);
+      for (const sensor of filteredSensors) next.delete(sensor.path);
+      return next;
+    });
+  }, [filteredSensors]);
 
   const save = useCallback(async () => {
     setActionLoading(true);
@@ -212,6 +326,83 @@ export function ZeroBusPage() {
                 onChange={(e) => setConfig((c: any) => ({ ...c, auth: { ...(c?.auth ?? {}), client_secret: e.target.value } }))}
               />
             </Field>
+          </div>
+
+          <div style={{ border: "1px solid var(--border-panel)", borderRadius: 2, padding: 12, display: "grid", gap: 10 }}>
+            <div className="section-title">Sensor selection for ZeroBus</div>
+            <div className="muted">
+              Selected: <strong>{selectedSensors.size}</strong> / {allSensors.length} sensors
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div style={{ display: "grid", gap: 6 }}>
+                <div className="muted" style={{ fontWeight: 600 }}>Filter by Industry</div>
+                <div style={{ maxHeight: 140, overflow: "auto", border: "1px solid var(--border-panel)", borderRadius: 2, padding: 8 }}>
+                  {industryOptions.map((industry) => (
+                    <label key={industry} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
+                      <input
+                        type="checkbox"
+                        checked={industryFilters.has(industry)}
+                        onChange={(e) => toggleIndustryFilter(industry, e.target.checked)}
+                      />
+                      <span>{industry}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gap: 6 }}>
+                <div className="muted" style={{ fontWeight: 600 }}>Filter by PLC/System</div>
+                <div style={{ maxHeight: 140, overflow: "auto", border: "1px solid var(--border-panel)", borderRadius: 2, padding: 8 }}>
+                  {plcOptions.map((plc) => (
+                    <label key={plc} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
+                      <input type="checkbox" checked={plcFilters.has(plc)} onChange={(e) => togglePlcFilter(plc, e.target.checked)} />
+                      <span>{plc}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <Button type="button" onClick={() => selectFilteredSensors()}>
+                Select filtered ({filteredSensors.length})
+              </Button>
+              <Button type="button" onClick={() => clearFilteredSensors()}>
+                Clear filtered
+              </Button>
+              <Button
+                type="button"
+                onClick={() => {
+                  setIndustryFilters(new Set());
+                  setPlcFilters(new Set());
+                }}
+              >
+                Clear filters
+              </Button>
+            </div>
+
+            <div style={{ maxHeight: 260, overflow: "auto", border: "1px solid var(--border-panel)", borderRadius: 2, padding: 8 }}>
+              {sensorLoading ? (
+                <div className="muted">Loading sensors...</div>
+              ) : filteredSensors.length === 0 ? (
+                <div className="muted">No sensors match current filters.</div>
+              ) : (
+                filteredSensors.map((sensor) => (
+                  <label key={sensor.path} style={{ display: "grid", gridTemplateColumns: "20px 1fr", gap: 8, marginBottom: 8 }}>
+                    <input
+                      type="checkbox"
+                      checked={selectedSensors.has(sensor.path)}
+                      onChange={(e) => toggleSensorSelection(sensor.path, e.target.checked)}
+                    />
+                    <span>
+                      <strong>{sensor.name}</strong>
+                      <span className="muted"> - {sensor.industryDisplay} - {sensor.plc}</span>
+                    </span>
+                  </label>
+                ))
+              )}
+            </div>
           </div>
 
           <div className="muted">
