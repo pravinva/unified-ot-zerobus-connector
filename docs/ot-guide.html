@@ -187,6 +187,7 @@ body {
 </div>
 <script>
 var SECTIONS = [
+
   {
     badge:"FOUNDATION", title:"Introduction to OT", sub:"operational technology basics", color:"#00a972",
     needs:[], key:"OT vs IT",
@@ -351,9 +352,9 @@ var SECTIONS = [
       {t:"p", s:"<strong>Bronze Layer:</strong> Append-only, immutable sensor data. Partition by plant_id, date, hour. Retain 90 days. Compressed with ZSTD. Liquid clustering on (asset_id, timestamp) for time-series queries. Enable deletion vectors for GDPR compliance."},,
       {t:"p", s:"<strong>Silver Layer:</strong> Cleaned data. Remove duplicates (common with OT protocols that retry). Cast string timestamps to timestamp_ntz. Validate sensor ranges (temperature -40 to 120°C). Flag outliers using Z-score. Join with asset metadata (turbine_id → turbine_model, manufacturer). Z-order on (asset_id, metric_name, timestamp)."},,
       {t:"p", s:"<strong>Gold Layer:</strong> Aggregated KPIs. Hourly OEE by line. Daily production by SKU. Mean time between failures (MTBF) by equipment class. Materialized views for dashboards. Pre-join dimensions for fast BI queries."},,
-      {t:"h", s:"Real-world example: MCE Field Operations"},,
-      {t:"p", s:"The <strong>Main Character Energy (MCE) Field Operations platform</strong> demonstrates Databricks + OT integration at scale:<br>- 2,000 wind turbines across 50 sites<br>- 500 GB/day sensor data (vibration, temperature, power output)<br>- Lakeflow DLT pipeline: Bronze → Silver → Gold<br>- Claude AI via Databricks FMAPI generates work orders from anomalies<br>- Real-time dashboard showing turbine health, predicted failures, ROI from predictive maintenance"},,
-      {t:"e", l:"MCE WORK ORDER AI AGENT", s:"When turbine vibration exceeds 80 Hz threshold, the Lakeflow pipeline detects anomaly, triggers Claude AI via FMAPI with prompt: 'Analyze this critical alert: Turbine MCE-0093, vibration 95.3 Hz, temp 48.2°C'. Claude generates unique work order with root cause analysis, required parts (SKF bearing kit), estimated repair time (8 hours), and urgency (P1 critical). Work order written to Delta Lake, dispatched to field technicians."},,
+      {t:"h", s:"Real-world example: Wind farm predictive maintenance"},,
+      {t:"p", s:"A typical Databricks + OT integration at scale:<br>- 2,000 wind turbines across 50 sites<br>- 500 GB/day sensor data (vibration, temperature, power output)<br>- Lakeflow DLT pipeline: Bronze → Silver → Gold<br>- ML models detect bearing wear 7 days before failure<br>- Real-time dashboard showing turbine health, predicted failures, and maintenance scheduling"},,
+      {t:"e", l:"PREDICTIVE WORK ORDER GENERATION", s:"When turbine vibration exceeds 80 Hz threshold, the Lakeflow pipeline detects the anomaly. An automated workflow generates a work order with: sensor readings (vibration 95.3 Hz, temp 48.2°C), predicted failure mode (bearing wear), required parts (SKF bearing kit), estimated repair time (8 hours), and urgency level (P1 critical). Work order written to Delta Lake and dispatched to field technicians."},,
       {t:"h", s:"ML models on OT data"},,
       {t:"p", s:"Databricks enables ML/AI use cases that traditional OT systems cannot support:"},,
       {t:"f", s:"PREDICTIVE MAINTENANCE:\n- Feature engineering: rolling averages, FFT on vibration\n- Model: XGBoost predicts failure 7 days in advance\n- Training: 3 years historical data, 10,000 failure events\n- Deployment: Model as SQL UDF, scores every asset hourly\n- Monitoring: Lakehouse Monitoring tracks prediction drift\n\nQUALITY PREDICTION:\n- Input: 50 process parameters during batch\n- Output: Predict final product quality (pass/fail)\n- Benefit: Adjust recipe mid-batch to save failed batches\n- ROI: $500k/year reduction in scrap\n\nROOT CAUSE ANALYSIS:\n- Graph neural network on asset dependency graph\n- When Line 3 stops, model traces upstream cause\n- Example: Boiler pressure drop → steam shortage → turbine trip → line stop\n- Explains 80% of downtime events automatically"},,
@@ -509,6 +510,49 @@ var SECTIONS = [
       {t:"e", l:"BOOKS", s:"<em>Industrial Network Security</em> by Eric D. Knapp and Joel Thomas Langill (2nd ed, 2014) is the definitive OT security reference. <em>Practical Industrial Data Communications</em> by Steve Mackay covers protocols. <em>ISA-95 for Dummies</em> by Charlie Gifford explains the Purdue Model."},,
       {t:"e", l:"ONLINE COURSES", s:"ISA (International Society of Automation) offers certifications: CCST (Certified Control Systems Technician), CAP (Certified Automation Professional), CSE (Cybersecurity Expert). Coursera and Udemy have IIoT and PLC programming courses."},,
       {t:"e", l:"COMMUNITIES", s:"r/PLC and r/SCADA on Reddit, ISA forums, Control.com forums, and LinkedIn groups like \"Industrial Automation Professionals\" are active communities for troubleshooting and best practices."},
+,
+  {
+    badge:"GLOSSARY", title:"OT & Databricks Glossary", sub:"key terms and acronyms", color:"#00a972",
+    needs:[], key:"Glossary",
+    gives:[],
+    body:[
+      {t:"h", s:"OT & Industrial Automation Terms"},
+      {t:"p", s:"<strong>4-20mA:</strong> Analog current signal standard for sensors (4mA = 0%, 20mA = 100% of range). Noise-resistant over long distances."},
+      {t:"p", s:"<strong>DCS (Distributed Control System):</strong> Control system where controllers are distributed across the plant, not centralized. Common in process industries."},
+      {t:"p", s:"<strong>DMZ (Demilitarized Zone):</strong> Network segment between OT and IT networks, with firewalls on both sides. Level 3.5 in Purdue Model."},
+      {t:"p", s:"<strong>DNP3 (Distributed Network Protocol):</strong> Communication protocol used in electric utilities, water/wastewater, and oil/gas for SCADA systems."},
+      {t:"p", s:"<strong>HMI (Human-Machine Interface):</strong> Graphical displays showing process status and allowing operator control. Touchscreens, panel views, SCADA displays."},
+      {t:"p", s:"<strong>ICS (Industrial Control System):</strong> Umbrella term for all control systems: PLCs, DCS, SCADA, SIS. Synonymous with OT."},
+      {t:"p", s:"<strong>IEC 62443:</strong> International standard for industrial cybersecurity. Defines security levels (SL 1-4), zones and conduits."},
+      {t:"p", s:"<strong>IIoT (Industrial Internet of Things):</strong> IoT applied to industrial systems. Sensors, edge gateways, cloud analytics, digital twins."},
+      {t:"p", s:"<strong>ISA-95:</strong> International standard defining the Purdue Model. Levels 0-4 (field devices to business planning)."},
+      {t:"p", s:"<strong>Ladder Logic:</strong> Programming language for PLCs resembling electrical relay diagrams. Rungs, coils, contacts."},
+      {t:"p", s:"<strong>MES (Manufacturing Execution System):</strong> Level 3 system tracking production, quality, genealogy, OEE. Bridges PLCs and ERP."},
+      {t:"p", s:"<strong>Modbus:</strong> Serial (RTU) or Ethernet (TCP) protocol for reading/writing PLC registers. Simple, open, universal."},
+      {t:"p", s:"<strong>OEE (Overall Equipment Effectiveness):</strong> Availability × Performance × Quality. Measures manufacturing productivity."},
+      {t:"p", s:"<strong>OPC-UA (OPC Unified Architecture):</strong> Modern industrial protocol with security, rich data models, pub/sub. Successor to OPC Classic."},
+      {t:"p", s:"<strong>OT (Operational Technology):</strong> Hardware and software controlling physical processes. PLCs, SCADA, sensors, valves, motors."},
+      {t:"p", s:"<strong>PLC (Programmable Logic Controller):</strong> Ruggedized computer controlling machines. Reads sensors, executes logic, outputs to actuators."},
+      {t:"p", s:"<strong>Purdue Model:</strong> ISA-95 reference architecture with 6 levels (0-5). Defines IT/OT hierarchy and security zones."},
+      {t:"p", s:"<strong>RTU (Remote Terminal Unit):</strong> Like a PLC but for remote sites. Common in utilities, pipelines. Often battery/solar powered."},
+      {t:"p", s:"<strong>SCADA (Supervisory Control And Data Acquisition):</strong> Level 2 system for monitoring and controlling geographically dispersed assets."},
+      {t:"p", s:"<strong>SIS (Safety Instrumented System):</strong> Independent layer protecting against hazardous conditions. E-stops, pressure relief, ESD systems."},
+      {t:"p", s:"<strong>Sparkplug B:</strong> MQTT specification for industrial systems. Defines how to represent sensors, alarms, assets in MQTT topics."},
+      {t:"h", s:"Databricks & Data Platform Terms"},
+      {t:"p", s:"<strong>Autoloader:</strong> Databricks feature for incrementally ingesting files (JSON, Parquet, CSV) from cloud storage into Delta Lake."},
+      {t:"p", s:"<strong>Bronze/Silver/Gold:</strong> Lakehouse architecture. Bronze = raw, Silver = cleaned, Gold = aggregated/business-ready."},
+      {t:"p", s:"<strong>Delta Lake:</strong> Open-source storage layer providing ACID transactions, time travel, schema enforcement on Parquet files."},
+      {t:"p", s:"<strong>DLT (Delta Live Tables):</strong> Databricks framework for building reliable data pipelines with automatic dependency management."},
+      {t:"p", s:"<strong>Lakehouse:</strong> Architecture combining data lake (cheap storage, all data types) and data warehouse (ACID, SQL, performance)."},
+      {t:"p", s:"<strong>Lakehouse Monitoring:</strong> Databricks feature for detecting data drift, quality issues, and monitoring ML model performance."},
+      {t:"p", s:"<strong>Lakeflow:</strong> Databricks orchestration framework for ingesting data from external sources (databases, SaaS apps, historians)."},
+      {t:"p", s:"<strong>Liquid Clustering:</strong> Delta Lake feature for optimizing data layout automatically based on query patterns. Replaces manual Z-ordering."},
+      {t:"p", s:"<strong>Unity Catalog:</strong> Unified governance for data, ML models, and files. Row/column-level security, lineage, audit logs."},
+      {t:"p", s:"<strong>Z-order:</strong> Technique to co-locate related data by multiple columns. Improves query performance on Delta Lake tables."},
+      {t:"h", s:"Acronyms Quick Reference"},
+      {t:"f", s:"DCS   = Distributed Control System\nDMZ   = Demilitarized Zone\nDNP3  = Distributed Network Protocol\nHMI   = Human-Machine Interface\nICS   = Industrial Control System\nIIoT  = Industrial Internet of Things\nMES   = Manufacturing Execution System\nOEE   = Overall Equipment Effectiveness\nOPC   = OLE for Process Control (legacy)\nOT    = Operational Technology\nPLC   = Programmable Logic Controller\nRTU   = Remote Terminal Unit\nSCADA = Supervisory Control And Data Acquisition\nSIS   = Safety Instrumented System\nDLT   = Delta Live Tables"}
+    ]
+  }
 ];
 
 function rgba(hex, a) {
