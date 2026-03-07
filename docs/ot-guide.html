@@ -215,7 +215,7 @@ var SECTIONS = [
     gives:["Firewall","Data Diode","Jump Server","Unidirectional Gateway","Network Segmentation","Defense in Depth"],
     body:[
       {t:"h", s:"The critical security boundary"},
-      {t:"i", s:"The most important principle of Level 2: it supervises, but does not replace Level 1. If the SCADA system crashes, PLCs at Level 1 continue running their control logic. The plant keeps operating, even though operators have lost visibility. This independence is by design and is required by safety standards like IEC 61511."}
+      {t:"i", s:"Level 3.5 is the controlled handoff between OT and IT. The DMZ isolates plant control networks from enterprise networks while allowing approved flows such as historian replication, MES integration, reporting, and remote support through tightly governed access paths."}
     ]
   },
   {
@@ -224,7 +224,7 @@ var SECTIONS = [
     gives:["MES","Batch Management","Production Scheduling","Quality Management","Genealogy Tracking","OEE"],
     body:[
       {t:"h", s:"What happens at Level 3"},
-      {t:"i", s:"PLCs are the workhorses of industrial automation. They run 24/7 for years without rebooting, in environments that would destroy a consumer computer. Reliability and predictability are more important than raw computing power. A modern PLC might have the performance of a 1990s PC, but that is all it needs."}
+      {t:"i", s:"Level 3 is where MES coordinates production execution: work orders, batch/recipe control, quality checks, traceability, and performance metrics like OEE. It sits above SCADA/DCS and below enterprise systems such as ERP."}
     ]
   },
   {
@@ -233,7 +233,7 @@ var SECTIONS = [
     gives:["SCADA","DCS","HMI","Historian","Alarm Management","Batch Control","Trending","Remote Monitoring"],
     body:[
       {t:"h", s:"What happens at Level 2"},
-      {t:"i", s:"Level 0 must be able to operate safely without Level 1, or be shut down safely in the event of Level 1 failure. This is the foundational safety principle of the Purdue Model. Emergency shutdown systems at Level 0 are often hardwired, bypassing all digital control."}
+      {t:"i", s:"Level 2 provides plant-wide visibility and supervisory control through SCADA/DCS, HMIs, alarms, and historians. Operators monitor process state and adjust setpoints, while deterministic control logic still executes at Level 1."}
     ]
   },
   {
@@ -242,7 +242,7 @@ var SECTIONS = [
     gives:["PLC","RTU","Ladder Logic","Function Block","Real-time Control","Scan Cycle","I/O Modules","Local Control"],
     body:[
       {t:"h", s:"What happens at Level 1"},
-      {t:"i", s:"Modern IIoT initiatives are challenging the strict Purdue hierarchy. Edge computing, cloud analytics, and real-time monitoring blur the lines between levels. But even in modern architectures, the core principle remains: never compromise the safety and availability of Level 0-2 for the convenience of higher-level systems."}
+      {t:"i", s:"Level 1 is the real-time control layer. PLCs and RTUs read inputs from Level 0, execute deterministic logic in scan cycles, and drive outputs to actuators. This is where stable, predictable control of equipment is enforced."}
     ]
   },
   {
