@@ -628,18 +628,6 @@ function init() {
     entries.forEach(function(e){ if(e.isIntersecting) e.target.classList.add("show"); });
   },{threshold:0.05});
   document.querySelectorAll(".cw").forEach(function(el){ obs.observe(el); });
-  setTimeout(function(){ openCard(0); }, 150);
-}
-function openCard(i) {
-  var cw = document.querySelector(".cw[data-i='"+i+"']");
-  if (!cw) return;
-  var card = cw.querySelector(".card"), body = cw.querySelector(".card-body");
-  if (!card.classList.contains("open")) {
-    card.classList.add("open"); body.classList.add("open");
-    var ti = document.querySelector(".ti[data-i='"+i+"']");
-    if (ti) { ti.style.borderLeftColor = SECTIONS[i].color; ti.style.color = SECTIONS[i].color; }
-    document.querySelectorAll(".ti").forEach(function(t,j){ t.classList.toggle("active",j===i); });
-  }
 }
 init();
 </script>
