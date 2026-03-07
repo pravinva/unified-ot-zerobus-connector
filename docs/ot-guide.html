@@ -576,24 +576,37 @@ function buildBody(blocks) {
   }).join("");
 }
 function getRenderSections() {
-  var orderByTitle = {
-    "Introduction to OT": 1,
-    "The Purdue Model": 2,
-    "Physical Process Layer": 3,
-    "Basic Control Layer": 4,
-    "Supervisory Control": 5,
-    "Manufacturing Execution Systems": 6,
-    "Industrial DMZ": 7,
-    "Databricks & OT Data Integration": 8
+  var orderByBadge = {
+    "FOUNDATION": 1,
+    "ARCHITECTURE": 2,
+    "LEVEL 0": 3,
+    "LEVEL 1": 4,
+    "LEVEL 2": 5,
+    "LEVEL 3": 6,
+    "LEVEL 3.5": 7,
+    "DATABRICKS": 8
   };
   return SECTIONS.slice().sort(function(a, b) {
-    var ai = orderByTitle[a.title];
-    var bi = orderByTitle[b.title];
+    var ai = orderByBadge[a.badge];
+    var bi = orderByBadge[b.badge];
     if (ai != null && bi != null) return ai - bi;
     if (ai != null) return -1;
     if (bi != null) return 1;
     return 0;
   });
+}
+function getNavTitle(sec) {
+  var navTitles = {
+    "FOUNDATION": "01 OT Introduction",
+    "ARCHITECTURE": "02 Purdue Model",
+    "LEVEL 0": "03 Level 0 - Physical Process",
+    "LEVEL 1": "04 Level 1 - Basic Control",
+    "LEVEL 2": "05 Level 2 - Supervisory Control",
+    "LEVEL 3": "06 Level 3 - MES",
+    "LEVEL 3.5": "07 Level 3.5 - Industrial DMZ",
+    "DATABRICKS": "08 Level 4 - Databricks"
+  };
+  return navTitles[sec.badge] || sec.title;
 }
 var RENDER_SECTIONS = getRenderSections();
 function openCard(i) {
@@ -619,7 +632,7 @@ function init() {
   var cards = document.getElementById("cards");
   RENDER_SECTIONS.forEach(function(sec, i) {
     var ti = document.createElement("div");
-    ti.className = "ti"; ti.textContent = sec.title; ti.dataset.i = i;
+    ti.className = "ti"; ti.textContent = getNavTitle(sec); ti.dataset.i = i;
     ti.addEventListener("click", function() {
       var cw = document.querySelector(".cw[data-i='"+i+"']");
       if (cw) { cw.scrollIntoView({behavior:"smooth",block:"center"}); setTimeout(function(){ openCard(i); },350); }
