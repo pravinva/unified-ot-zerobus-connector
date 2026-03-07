@@ -64,8 +64,8 @@ body {
 .csub { font-style:italic;font-size:13px;color:var(--muted);flex-shrink:0; }
 .chev { color:var(--muted);font-size:11px;transition:transform .3s;flex-shrink:0; }
 .card.open .chev { transform:rotate(180deg); }
-.card-body { max-height:0;overflow:hidden;transition:max-height .5s cubic-bezier(.4,0,.2,1); }
-.card-body.open { max-height:10000px; }
+.card-body { max-height:10000px;overflow:visible;transition:max-height .5s cubic-bezier(.4,0,.2,1); }
+.card-body.collapsed { max-height:0;overflow:hidden; }
 .card-inner { border-top:1px solid var(--bord);padding:20px 20px 26px; }
 .sec { margin-top:16px; }
 .sec:first-child { margin-top:0; }
