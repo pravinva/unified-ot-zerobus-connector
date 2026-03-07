@@ -195,7 +195,9 @@ var SECTIONS = [
     gives:["OT Definition","IT/OT Convergence","Purdue Model Overview","Industrial Control Systems","Critical Infrastructure"],
     body:[
       {t:"h", s:"What is Operational Technology (OT)?"},
-      {t:"i", s:"The Industrial DMZ is where Databricks Lakehouse acts as the data gateway. Instead of allowing direct database connections from IT to OT systems (a security nightmare), the DMZ hosts Databricks connectors that ingest data from SCADA/MES, store it in Delta Lake behind Unity Catalog access controls, and serve it to IT via secure SQL endpoints. This architecture is documented in the Unified OT Connector project."}
+      {t:"p", s:"<strong>Operational Technology (OT)</strong> is the hardware and software used to monitor and control physical processes. In practice, OT runs plants, production lines, substations, pipelines, and water systems through sensors, controllers, and operator interfaces."},
+      {t:"p", s:"OT priorities are different from IT priorities. OT focuses first on <em>safety</em> and <em>availability</em>, because failures can damage equipment, stop production, or create human risk. IT focuses more on data confidentiality and business system resilience."},
+      {t:"i", s:"This guide starts with the Purdue model and then walks level-by-level from Level 0 through Level 3.5 before placing enterprise analytics at Level 4."}
     ]
   },
   {
