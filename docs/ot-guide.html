@@ -612,10 +612,10 @@ function init() {
     cards.appendChild(cw);
     var card = cw.querySelector(".card"), body = cw.querySelector(".card-body");
     card.addEventListener("click", function() {
-      var open = card.classList.contains("open");
-      card.classList.toggle("open", !open); body.classList.toggle("open", !open);
-      document.querySelectorAll(".ti").forEach(function(t,j){ t.classList.toggle("active",!open && j===i); });
-      if (!open) { ti.style.borderLeftColor = sec.color; ti.style.color = sec.color; }
+      var collapsed = body.classList.contains("collapsed");
+      body.classList.toggle("collapsed");
+      document.querySelectorAll(".ti").forEach(function(t,j){ t.classList.toggle("active",collapsed && j===i); });
+      if (collapsed) { ti.style.borderLeftColor = sec.color; ti.style.color = sec.color; }
       else { ti.style.borderLeftColor = ""; ti.style.color = ""; }
     });
   });
