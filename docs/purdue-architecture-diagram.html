@@ -228,31 +228,20 @@ svg {
         <text x="850" y="1175" font-family="JetBrains Mono, monospace" font-size="11" fill="rgba(255,255,255,0.8)">Honeywell Sensing • Sick Sensors</text>
       </g>
 
-      <!-- DATABRICKS LAKEHOUSE (Spans Level 3 and DMZ) -->
+      <!-- DATABRICKS LAKEHOUSE (At Level 4) -->
       <g>
-        <rect x="80" y="350" width="40" height="320" rx="4" fill="url(#databricksGradient)" filter="url(#shadow)" opacity="0.95"/>
-        <text x="95" y="510" font-family="JetBrains Mono, monospace" font-size="16" font-weight="700" fill="white" text-anchor="middle" transform="rotate(-90 95 510)">DATABRICKS LAKEHOUSE</text>
+        <rect x="80" y="210" width="40" height="120" rx="4" fill="url(#databricksGradient)" filter="url(#shadow)" opacity="0.95"/>
+        <text x="95" y="270" font-family="JetBrains Mono, monospace" font-size="16" font-weight="700" fill="white" text-anchor="middle" transform="rotate(-90 95 270)">DATABRICKS LAKEHOUSE</text>
 
         <!-- Databricks Details Box -->
-        <rect x="1310" y="350" width="230" height="320" rx="6" fill="url(#databricksGradient)" filter="url(#shadow)" stroke="#ff3621" stroke-width="2"/>
-        <text x="1425" y="385" font-family="Inter, sans-serif" font-size="18" font-weight="700" fill="white" text-anchor="middle">DATABRICKS</text>
-        <text x="1425" y="405" font-family="JetBrains Mono, monospace" font-size="11" font-weight="600" fill="rgba(255,255,255,0.9)" text-anchor="middle">Analytics & AI Layer</text>
+        <rect x="1310" y="210" width="230" height="120" rx="6" fill="url(#databricksGradient)" filter="url(#shadow)" stroke="#ff3621" stroke-width="2"/>
+        <text x="1425" y="240" font-family="Inter, sans-serif" font-size="18" font-weight="700" fill="white" text-anchor="middle">DATABRICKS</text>
+        <text x="1425" y="258" font-family="JetBrains Mono, monospace" font-size="11" font-weight="600" fill="rgba(255,255,255,0.9)" text-anchor="middle">Level 4: Analytics & AI</text>
 
-        <text x="1330" y="435" font-family="JetBrains Mono, monospace" font-size="10" font-weight="600" fill="white">DATA INGESTION:</text>
-        <text x="1330" y="455" font-family="JetBrains Mono, monospace" font-size="9" fill="rgba(255,255,255,0.85)">• MQTT Sparkplug → Autoloader</text>
-        <text x="1330" y="472" font-family="JetBrains Mono, monospace" font-size="9" fill="rgba(255,255,255,0.85)">• OPC-UA → Unified Connector</text>
-        <text x="1330" y="489" font-family="JetBrains Mono, monospace" font-size="9" fill="rgba(255,255,255,0.85)">• OSI PI Historian → Lakeflow</text>
-        <text x="1330" y="506" font-family="JetBrains Mono, monospace" font-size="9" fill="rgba(255,255,255,0.85)">• Modbus TCP → DLT Pipelines</text>
-
-        <text x="1330" y="535" font-family="JetBrains Mono, monospace" font-size="10" font-weight="600" fill="white">ARCHITECTURE:</text>
-        <text x="1330" y="555" font-family="JetBrains Mono, monospace" font-size="9" fill="rgba(255,255,255,0.85)">• Bronze: Raw sensor data</text>
-        <text x="1330" y="572" font-family="JetBrains Mono, monospace" font-size="9" fill="rgba(255,255,255,0.85)">• Silver: Cleaned, validated</text>
-        <text x="1330" y="589" font-family="JetBrains Mono, monospace" font-size="9" fill="rgba(255,255,255,0.85)">• Gold: Aggregated metrics</text>
-
-        <text x="1330" y="615" font-family="JetBrains Mono, monospace" font-size="10" font-weight="600" fill="white">USE CASES:</text>
-        <text x="1330" y="635" font-family="JetBrains Mono, monospace" font-size="9" fill="rgba(255,255,255,0.85)">• Predictive Maintenance</text>
-        <text x="1330" y="652" font-family="JetBrains Mono, monospace" font-size="9" fill="rgba(255,255,255,0.85)">• Quality Prediction</text>
-        <text x="1330" y="669" font-family="JetBrains Mono, monospace" font-size="9" fill="rgba(255,255,255,0.85)">• OEE Dashboards</text>
+        <text x="1320" y="278" font-family="JetBrains Mono, monospace" font-size="8" font-weight="600" fill="white">Lakehouse Architecture:</text>
+        <text x="1320" y="292" font-family="JetBrains Mono, monospace" font-size="8" fill="rgba(255,255,255,0.85)">Bronze → Silver → Gold</text>
+        <text x="1320" y="305" font-family="JetBrains Mono, monospace" font-size="8" fill="rgba(255,255,255,0.85)">Unity Catalog • ML Models</text>
+        <text x="1320" y="318" font-family="JetBrains Mono, monospace" font-size="8" fill="rgba(255,255,255,0.85)">BI Dashboards • Analytics</text>
       </g>
 
       <!-- Connection Arrows -->
@@ -262,14 +251,13 @@ svg {
         </marker>
       </defs>
 
-      <!-- Arrows from OT layers to Databricks -->
-      <path d="M 300 830 Q 120 750, 120 670" stroke="#ff3621" stroke-width="3" fill="none" marker-end="url(#arrowhead)" opacity="0.7" stroke-dasharray="8,4"/>
-      <path d="M 300 950 Q 120 850, 120 670" stroke="#ff3621" stroke-width="3" fill="none" marker-end="url(#arrowhead)" opacity="0.7" stroke-dasharray="8,4"/>
-      <path d="M 300 1110 Q 120 900, 120 670" stroke="#ff3621" stroke-width="3" fill="none" marker-end="url(#arrowhead)" opacity="0.7" stroke-dasharray="8,4"/>
+      <!-- Arrows from OT layers to Databricks (Level 4) -->
+      <path d="M 300 750 Q 120 600, 120 330" stroke="#ff3621" stroke-width="3" fill="none" marker-end="url(#arrowhead)" opacity="0.7" stroke-dasharray="8,4"/>
+      <path d="M 300 950 Q 120 650, 120 330" stroke="#ff3621" stroke-width="3" fill="none" marker-end="url(#arrowhead)" opacity="0.7" stroke-dasharray="8,4"/>
+      <path d="M 300 1110 Q 120 700, 120 330" stroke="#ff3621" stroke-width="3" fill="none" marker-end="url(#arrowhead)" opacity="0.7" stroke-dasharray="8,4"/>
 
-      <!-- Databricks to Business layers -->
-      <path d="M 100 500 Q 60 350, 100 330" stroke="#ff3621" stroke-width="3" fill="none" marker-end="url(#arrowhead)" opacity="0.7"/>
-      <path d="M 100 500 Q 40 400, 100 210" stroke="#ff3621" stroke-width="3" fill="none" marker-end="url(#arrowhead)" opacity="0.7"/>
+      <!-- Databricks to Level 5 (Enterprise) -->
+      <path d="M 100 270 Q 60 180, 100 170" stroke="#ff3621" stroke-width="3" fill="none" marker-end="url(#arrowhead)" opacity="0.7"/>
 
       <!-- Protocol Labels on Arrows -->
       <text x="200" y="765" font-family="JetBrains Mono, monospace" font-size="10" font-weight="600" fill="#ff3621">Modbus TCP</text>
