@@ -44,8 +44,9 @@ body {
 .ti:hover { color:var(--bright);border-left-color:var(--muted); }
 .ti.active { color:var(--bright); }
 .cards { flex:1;min-width:0; }
-.cw { margin-bottom:6px;opacity:0;transform:translateY(14px);transition:opacity .4s,transform .4s; }
-.cw.show { opacity:1;transform:none; }
+.cw { margin-bottom:6px;opacity:1;transform:none;transition:opacity .4s,transform .4s; }
+.cw.animate-in { opacity:0;transform:translateY(14px); }
+.cw.animate-in.show { opacity:1;transform:none; }
 .conn { width:2px;height:18px;background:var(--bord);margin:0 0 0 20px; }
 .card {
   border:1px solid var(--bord);border-radius:6px;background:var(--surf);
@@ -574,6 +575,24 @@ function buildBody(blocks) {
     return '';
   }).join("");
 }
+function openCard(i) {
+  var cw = document.querySelector(".cw[data-i='"+i+"']");
+  if (!cw) return;
+  var card = cw.querySelector(".card");
+  var body = cw.querySelector(".card-body");
+  var ti = document.querySelector(".ti[data-i='"+i+"']");
+  if (!card || !body || !ti) return;
+
+  if (body.classList.contains("collapsed")) {
+    body.classList.remove("collapsed");
+  }
+  card.classList.add("open");
+  document.querySelectorAll(".ti").forEach(function(t, j) {
+    t.classList.toggle("active", j === i);
+  });
+  ti.style.borderLeftColor = SECTIONS[i].color;
+  ti.style.color = SECTIONS[i].color;
+}
 function init() {
   var tnav = document.getElementById("tnav");
   var cards = document.getElementById("cards");
@@ -586,7 +605,7 @@ function init() {
     });
     tnav.appendChild(ti);
     var cw = document.createElement("div");
-    cw.className = "cw"; cw.dataset.i = i;
+    cw.className = "cw animate-in"; cw.dataset.i = i;
     var needHtml = sec.needs.length
       ? '<div class="sec"><div class="slabel">Prerequisites</div><div class="chips">'+chips(sec.needs,"chip cd")+'</div></div>'
       : '<div class="sec"><div class="slabel">Prerequisites</div><span style="font-style:italic;color:var(--muted);font-size:13px">Foundation &mdash; no prerequisites</span></div>';
@@ -615,6 +634,7 @@ function init() {
     card.addEventListener("click", function() {
       var collapsed = body.classList.contains("collapsed");
       body.classList.toggle("collapsed");
+      card.classList.toggle("open", collapsed);
       document.querySelectorAll(".ti").forEach(function(t,j){ t.classList.toggle("active",collapsed && j===i); });
       if (collapsed) { ti.style.borderLeftColor = sec.color; ti.style.color = sec.color; }
       else { ti.style.borderLeftColor = ""; ti.style.color = ""; }
@@ -625,10 +645,16 @@ function init() {
     var pct = window.scrollY / (document.body.scrollHeight - window.innerHeight) * 100;
     fill.style.width = Math.min(pct,100)+"%";
   });
-  var obs = new IntersectionObserver(function(entries){
-    entries.forEach(function(e){ if(e.isIntersecting) e.target.classList.add("show"); });
-  },{threshold:0.05});
-  document.querySelectorAll(".cw").forEach(function(el){ obs.observe(el); });
+  var cardWraps = document.querySelectorAll(".cw");
+  if ("IntersectionObserver" in window) {
+    var obs = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){ if(e.isIntersecting) e.target.classList.add("show"); });
+    },{threshold:0.05});
+    cardWraps.forEach(function(el){ obs.observe(el); });
+  } else {
+    // Fallback for browsers/environments without IntersectionObserver support.
+    cardWraps.forEach(function(el){ el.classList.add("show"); });
+  }
 }
 init();
 </script>
