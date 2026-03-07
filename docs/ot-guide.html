@@ -227,8 +227,10 @@ var SECTIONS = [
       {t:"p", s:"Level 3.5 is the controlled exchange zone between Level 3 operations and Level 4 enterprise systems. It exists to enforce <em>minimum necessary connectivity</em> while preventing direct trust between business networks and control networks."},
       {t:"f", s:"DMZ DESIGN PATTERN:\n- Dual firewalls with deny-by-default policy\n- Explicit allow-lists by source, destination, port, and protocol\n- Jump hosts for vendor/remote access with MFA + session recording\n- One-way replication where feasible (historian mirrors, diode patterns)\n- IDS/monitoring focused on OT-aware traffic behavior"},
       {t:"e", l:"APPROVED FLOWS", s:"Historian replication to reporting platforms, MES-to-ERP exchange, patch repository staging, and controlled remote support are typical approved flows. Each flow should have an owner and review cadence."},
+      {t:"e", l:"FIELD NOTE: WHERE CONNECTORS SHOULD LIVE", s:"For Unified OT Connector / ZeroBus-style ingestion, Level 3.5 is usually the safest and most supportable placement. It gives controlled access to OT data sources while keeping strict separation from both enterprise user networks and real-time control segments."},
+      {t:"e", l:"WHAT NOT TO DO", s:"Do not deploy ingestion connectors in Level 3 control-adjacent systems or below (Levels 0-2). Avoid adding analytics dependencies into control domains, avoid direct IT-to-PLC paths, and avoid any pattern that can impact deterministic operations or safety boundaries."},
       {t:"e", l:"COMMON FAILURE MODE", s:"Over time, temporary firewall exceptions become permanent and undocumented. Quarterly rule reviews and recertification prevent DMZ sprawl and reduce exposure."},
-      {t:"i", s:"A healthy DMZ is boring by design: tightly controlled, auditable, and predictable."}
+      {t:"i", s:"Personal take from field work: if the connector placement feels convenient for IT but uncomfortable for controls engineers, it is probably in the wrong place. Put ingestion at 3.5, keep 0-2 deterministic, and keep Level 3 focused on execution."}
     ]
   },
   {
