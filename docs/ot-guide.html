@@ -172,7 +172,7 @@ body {
   <div class="hdr">
     <h1>Industrial Automation: Guide for Generalists</h1>
     <div class="hdr-rule"></div>
-    <p>A complete journey through Purdue Model Levels 0-3.5, OT protocols, Databricks integration, and the evolution of industrial control systems.</p>
+    <p>A practical journey through Purdue Model Levels 0-3.5, OT protocols, Databricks integration, and the evolution of industrial control systems.</p>
   </div>
   <div class="layout">
     <div class="tower">
@@ -182,8 +182,8 @@ body {
     <div class="cards" id="cards"></div>
   </div>
   <div class="footer">
-    From field devices through MES to the IT boundary &mdash; understanding the complete OT stack with Databricks integration.<br>
-    A comprehensive study guide for industrial automation practitioners and data engineers.
+    From field devices through MES to the IT boundary &mdash; understanding the OT stack with Databricks integration.<br>
+    A practical guide for industrial automation practitioners and data engineers.
   </div>
 </div>
 <script>
@@ -319,7 +319,7 @@ var SECTIONS = [
       {t:"p", s:"MES bridges the gap between the plant floor (Levels 0-2) and enterprise systems (Levels 4-5). It answers questions like: Which batch is in Reactor 3? What materials went into Batch 2024-0315? Why did Line 2 stop for 15 minutes? What is our Overall Equipment Effectiveness (OEE) this week?"},
       {t:"h", s:"Core MES functions"},
       {t:"f", s:"ISA-95 DEFINES 11 MES FUNCTIONS:\n1. Production Scheduling - Which products to make, when, and where\n2. Dispatching - Send work orders to production lines\n3. Resource Management - Track materials, tools, equipment\n4. Batch/Recipe Management - Execute production recipes\n5. Quality Management - In-process testing, SPC charts\n6. Genealogy Tracking - Material traceability (critical for recalls)\n7. Performance Analysis - OEE, downtime analysis\n8. Maintenance Management - Integrate with CMMS\n9. Labor Management - Track operator activities\n10. Data Collection - Aggregate data from Level 0-2\n11. Document Control - SOPs, work instructions"},
-      {t:"e", l:"PHARMACEUTICAL MES EXAMPLE", s:"A pharmaceutical plant uses MES to ensure FDA compliance. Every batch is tracked with a unique ID. The MES records which raw materials (with lot numbers) went into the batch, who operated the equipment (with digital signatures), what temperatures and pressures were maintained (from SCADA), and all quality test results. If a batch fails, MES provides complete genealogy for root cause analysis. This traceability is required by 21 CFR Part 11."},
+      {t:"e", l:"PHARMACEUTICAL MES EXAMPLE", s:"A pharmaceutical plant uses MES to ensure FDA compliance. Every batch is tracked with a unique ID. The MES records which raw materials (with lot numbers) went into the batch, who operated the equipment (with digital signatures), what temperatures and pressures were maintained (from SCADA), and all quality test results. If a batch fails, MES provides end-to-end genealogy for root cause analysis. This traceability is required by 21 CFR Part 11."},
       {t:"e", l:"AUTOMOTIVE MES EXAMPLE", s:"An automotive assembly plant uses MES to coordinate 1,200 robots and 3,000 workers across 8 lines producing 400,000 vehicles per year. MES schedules which car model goes down which line, dispatches parts from the warehouse via AGVs, tracks each vehicle by VIN through 300+ stations, flags quality defects for rework, and calculates real-time OEE. If Line 3 stops due to a robot fault, MES automatically reschedules production to other lines."},
       {t:"h", s:"OEE: the key MES metric"},
       {t:"p", s:"<strong>Overall Equipment Effectiveness (OEE)</strong> is the gold standard metric for manufacturing performance. OEE = Availability × Performance × Quality. A world-class facility targets 85% OEE."},
@@ -483,7 +483,7 @@ var SECTIONS = [
     ]
   },
   {
-    badge:"REFERENCE", title:"Level 0-3.5 Cheat Sheet", sub:"complete quick reference", color:"#ff3621",
+    badge:"REFERENCE", title:"Level 0-3.5 Cheat Sheet", sub:"quick reference", color:"#ff3621",
     needs:["Level 0","Level 1","Level 2","MES","DMZ","Databricks Lakehouse"], key:"Cheat Sheet",
     gives:["Quick Reference","Troubleshooting","Common Terminology","Standards","Resources"],
     body:[
