@@ -204,7 +204,7 @@ var SECTIONS = [
     gives:["Delta Lake","Unity Catalog","Lakeflow","DLT","Autoloader","Lakehouse Monitoring","ML on OT Data"],
     body:[
       {t:"h", s:"Where Databricks fits in OT architecture"},
-      {t:"i", s:"Level 3 MES is where Databricks excels. MES generates massive volumes of structured data: work orders, batch records, quality measurements, downtime events. Databricks ingests this data from MES systems, combines it with Level 0-2 sensor data, and enables advanced analytics: predictive quality, root cause analysis, digital twin simulations, and supply chain optimization."}
+      {t:"i", s:"Databricks is positioned at Level 4 as the enterprise analytics and AI layer. It ingests data from MES (Level 3), historians, and Level 0-2 telemetry via governed ingestion paths (typically through the Level 3.5 DMZ), then enables predictive quality, root cause analysis, digital twin simulations, and supply chain optimization."}
     ]
   },
   {
@@ -497,8 +497,8 @@ var SECTIONS = [
       {t:"f", s:"LEVEL 3: Manufacturing Execution Systems (MES)\nSystems: MES, batch management, production scheduling\nFunctions: Work orders, genealogy tracking, OEE, quality\nUpdate rate: Minutes to hours (not real-time)\nHardware: Enterprise servers, databases (SQL Server, Oracle)\nKey vendors: Siemens Opcenter, SAP ME, Rockwell FactoryTalk\nKey metric: OEE = Availability × Performance × Quality\nCommon issues: Data integration, recipe management, batch tracking\nTroubleshooting: Check database connections, review MES logs, validate work order flow"},
       {t:"h", s:"Level 3.5 at a glance"},
       {t:"f", s:"LEVEL 3.5: Industrial DMZ (IT/OT Boundary)\nPurpose: Security buffer between OT and IT networks\nComponents: Firewalls, data diodes, jump servers, IDS\nKey principle: Least privilege (minimum necessary traffic)\nFirewall rules: Allow historian reads, block all IT→OT writes\nData flow: OT → IT (one-way preferred)\nKey vendors: Palo Alto, Fortinet, Nozomi, Claroty, Dragos\nCommon issues: Firewall misconfig, certificate expiry, unauthorized access\nTroubleshooting: Review firewall logs, check DMZ connectivity, audit access logs"},
-      {t:"h", s:"Databricks at Level 3/3.5"},
-      {t:"f", s:"DATABRICKS: Analytics & AI Layer\nPosition: Level 3 analytics tier, ingests from Level 0-2\nArchitecture: Bronze (raw) → Silver (cleaned) → Gold (aggregated)\nIngestion: Autoloader (MQTT), Lakeflow (OPC-UA, historians)\nStorage: Delta Lake with Unity Catalog access control\nLatency: Near-real-time (1-3 seconds from sensor to lakehouse)\nUse cases: Predictive maintenance, quality prediction, OEE dashboards\nKey features: SQL on sensor data, ML models, Lakehouse Monitoring\nCommon issues: Schema drift, partition strategy, data skew\nTroubleshooting: Check connector logs, review pipeline metrics, validate Delta table health"},
+      {t:"h", s:"Databricks at Level 4"},
+      {t:"f", s:"DATABRICKS: Analytics & AI Layer\nPosition: Level 4 enterprise analytics tier (not MES), ingesting OT data from Levels 0-3 via approved boundaries\nArchitecture: Bronze (raw) → Silver (cleaned) → Gold (aggregated)\nIngestion: Autoloader (MQTT), Lakeflow (OPC-UA, historians)\nStorage: Delta Lake with Unity Catalog access control\nLatency: Near-real-time (1-3 seconds from sensor to lakehouse)\nUse cases: Predictive maintenance, quality prediction, OEE dashboards\nKey features: SQL on sensor data, ML models, Lakehouse Monitoring\nCommon issues: Schema drift, partition strategy, data skew\nTroubleshooting: Check connector logs, review pipeline metrics, validate Delta table health"},
       {t:"h", s:"Common terminology"},
       {t:"f", s:"TERMS YOU MUST KNOW:\nPV: Process Variable (measured value)\nSP: Setpoint (desired value)\nMV: Manipulated Variable (control output)\nPID: Proportional-Integral-Derivative (control algorithm)\nHMI: Human-Machine Interface (operator screen)\nI/O: Input/Output (connections to field)\nSIS: Safety Instrumented System (emergency shutdown)\nTrip: Emergency shutdown action\nInterlocks: Logic that prevents unsafe operations\nPermissives: Conditions that must be true to allow action"},
       {t:"h", s:"Key standards"},
@@ -575,6 +575,27 @@ function buildBody(blocks) {
     return '';
   }).join("");
 }
+function getRenderSections() {
+  var orderByTitle = {
+    "Introduction to OT": 1,
+    "The Purdue Model": 2,
+    "Physical Process Layer": 3,
+    "Basic Control Layer": 4,
+    "Supervisory Control": 5,
+    "Manufacturing Execution Systems": 6,
+    "Industrial DMZ": 7,
+    "Databricks & OT Data Integration": 8
+  };
+  return SECTIONS.slice().sort(function(a, b) {
+    var ai = orderByTitle[a.title];
+    var bi = orderByTitle[b.title];
+    if (ai != null && bi != null) return ai - bi;
+    if (ai != null) return -1;
+    if (bi != null) return 1;
+    return 0;
+  });
+}
+var RENDER_SECTIONS = getRenderSections();
 function openCard(i) {
   var cw = document.querySelector(".cw[data-i='"+i+"']");
   if (!cw) return;
@@ -590,13 +611,13 @@ function openCard(i) {
   document.querySelectorAll(".ti").forEach(function(t, j) {
     t.classList.toggle("active", j === i);
   });
-  ti.style.borderLeftColor = SECTIONS[i].color;
-  ti.style.color = SECTIONS[i].color;
+  ti.style.borderLeftColor = RENDER_SECTIONS[i].color;
+  ti.style.color = RENDER_SECTIONS[i].color;
 }
 function init() {
   var tnav = document.getElementById("tnav");
   var cards = document.getElementById("cards");
-  SECTIONS.forEach(function(sec, i) {
+  RENDER_SECTIONS.forEach(function(sec, i) {
     var ti = document.createElement("div");
     ti.className = "ti"; ti.textContent = sec.title; ti.dataset.i = i;
     ti.addEventListener("click", function() {
