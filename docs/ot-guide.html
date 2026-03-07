@@ -206,7 +206,13 @@ var SECTIONS = [
     gives:["Delta Lake","Unity Catalog","Lakeflow","DLT","Autoloader","Lakehouse Monitoring","ML on OT Data"],
     body:[
       {t:"h", s:"Where Databricks fits in OT architecture"},
-      {t:"i", s:"Databricks is positioned at Level 4 as the enterprise analytics and AI layer. It ingests data from MES (Level 3), historians, and Level 0-2 telemetry via governed ingestion paths (typically through the Level 3.5 DMZ), then enables predictive quality, root cause analysis, digital twin simulations, and supply chain optimization."}
+      {t:"p", s:"Databricks belongs at <strong>Level 4</strong> as the analytics and decision-support layer. It does not run real-time control loops. Instead, it consumes governed data from Levels 0-3 and produces insights, forecasts, and planning outputs for operations, engineering, and business teams."},
+      {t:"f", s:"LEVEL 4 RESPONSIBILITIES (DATABRICKS):\n- Ingest OT/MES/historian data through approved DMZ paths\n- Standardize data into Bronze → Silver → Gold layers\n- Build KPI models (OEE, downtime, quality loss, energy intensity)\n- Train/serve predictive models (failure risk, quality risk)\n- Provide BI/SQL access with governance and auditability"},
+      {t:"h", s:"What good Level 4 integration looks like"},
+      {t:"e", l:"DATA CONTRACTS", s:"Every upstream source should have clear contracts: timestamp semantics, units of measure, asset IDs, and late-arrival rules. Without this, analytics teams spend most of their time reconciling inconsistent OT exports."},
+      {t:"e", l:"CLEAR OUTPUTS", s:"Level 4 should emit actionable outputs, not dashboards alone: maintenance candidate lists, production risk scores, anomaly tickets, and planning recommendations with confidence and lineage."},
+      {t:"e", l:"WHAT TO AVOID", s:"Do not bypass Level 3.5 controls with direct workstation-to-PLC reads from IT analytics tools. Keep the control domain isolated and only use approved ingestion and replication paths."},
+      {t:"i", s:"Best practice: keep fast control at Levels 0-2, execution coordination at Level 3, and heavy analytics/AI at Level 4. That split preserves safety while still unlocking business value."}
     ]
   },
   {
@@ -215,7 +221,11 @@ var SECTIONS = [
     gives:["Firewall","Data Diode","Jump Server","Unidirectional Gateway","Network Segmentation","Defense in Depth"],
     body:[
       {t:"h", s:"The critical security boundary"},
-      {t:"i", s:"Level 3.5 is the controlled handoff between OT and IT. The DMZ isolates plant control networks from enterprise networks while allowing approved flows such as historian replication, MES integration, reporting, and remote support through tightly governed access paths."}
+      {t:"p", s:"Level 3.5 is the controlled exchange zone between Level 3 operations and Level 4 enterprise systems. It exists to enforce <em>minimum necessary connectivity</em> while preventing direct trust between business networks and control networks."},
+      {t:"f", s:"DMZ DESIGN PATTERN:\n- Dual firewalls with deny-by-default policy\n- Explicit allow-lists by source, destination, port, and protocol\n- Jump hosts for vendor/remote access with MFA + session recording\n- One-way replication where feasible (historian mirrors, diode patterns)\n- IDS/monitoring focused on OT-aware traffic behavior"},
+      {t:"e", l:"APPROVED FLOWS", s:"Historian replication to reporting platforms, MES-to-ERP exchange, patch repository staging, and controlled remote support are typical approved flows. Each flow should have an owner and review cadence."},
+      {t:"e", l:"COMMON FAILURE MODE", s:"Over time, temporary firewall exceptions become permanent and undocumented. Quarterly rule reviews and recertification prevent DMZ sprawl and reduce exposure."},
+      {t:"i", s:"A healthy DMZ is boring by design: tightly controlled, auditable, and predictable."}
     ]
   },
   {
@@ -224,7 +234,11 @@ var SECTIONS = [
     gives:["MES","Batch Management","Production Scheduling","Quality Management","Genealogy Tracking","OEE"],
     body:[
       {t:"h", s:"What happens at Level 3"},
-      {t:"i", s:"Level 3 is where MES coordinates production execution: work orders, batch/recipe control, quality checks, traceability, and performance metrics like OEE. It sits above SCADA/DCS and below enterprise systems such as ERP."}
+      {t:"p", s:"Level 3 is the production execution layer. MES turns planning intent into plant-floor action: dispatching work orders, enforcing recipes, recording genealogy, and validating in-process quality rules."},
+      {t:"f", s:"MES CORE CAPABILITIES:\n- Dispatch and track work orders by line/cell\n- Enforce route, recipe, and parameter limits\n- Capture lot genealogy and electronic batch records\n- Manage holds, rework, deviations, and release decisions\n- Compute execution KPIs (OEE, cycle time, first-pass yield)"},
+      {t:"e", l:"DOWNWARD HANDOFF", s:"MES sends executable context to Level 2/1 systems: job IDs, setpoint envelopes, material lots, and sequence constraints. It should send intent and limits, not raw controller logic."},
+      {t:"e", l:"UPWARD HANDOFF", s:"MES publishes trusted execution facts to Level 4: production outcomes, quality events, downtime reason codes, and traceability records for analytics and compliance."},
+      {t:"i", s:"When Level 3 is mature, operations can answer 'what happened, where, why, and with which materials' without manual data stitching."}
     ]
   },
   {
@@ -233,7 +247,11 @@ var SECTIONS = [
     gives:["SCADA","DCS","HMI","Historian","Alarm Management","Batch Control","Trending","Remote Monitoring"],
     body:[
       {t:"h", s:"What happens at Level 2"},
-      {t:"i", s:"Level 2 provides plant-wide visibility and supervisory control through SCADA/DCS, HMIs, alarms, and historians. Operators monitor process state and adjust setpoints, while deterministic control logic still executes at Level 1."}
+      {t:"p", s:"Level 2 provides supervisory visibility and coordinated operations across many controllers. SCADA/DCS systems present process state, alarm context, trends, and operating procedures to control-room teams."},
+      {t:"f", s:"LEVEL 2 OPERATOR WORKFLOW:\n- Monitor live process state and alarm priorities\n- Adjust setpoints/operating modes within approved limits\n- Execute startup/shutdown and abnormal situation procedures\n- Trend key tags and compare against expected envelopes\n- Coordinate with maintenance/quality during disturbances"},
+      {t:"e", l:"ALARM DISCIPLINE", s:"High alarm rate is a safety risk. Rationalized alarms, shelving rules, and consequence-based priorities reduce operator overload and improve response quality."},
+      {t:"e", l:"HISTORIAN VALUE", s:"Second-by-second trend history enables incident reconstruction, tuning, and drift detection. Good historian tagging standards are essential for later MES and analytics use."},
+      {t:"i", s:"Level 2 supervises and coordinates, but deterministic control decisions remain at Level 1."}
     ]
   },
   {
@@ -242,7 +260,11 @@ var SECTIONS = [
     gives:["PLC","RTU","Ladder Logic","Function Block","Real-time Control","Scan Cycle","I/O Modules","Local Control"],
     body:[
       {t:"h", s:"What happens at Level 1"},
-      {t:"i", s:"Level 1 is the real-time control layer. PLCs and RTUs read inputs from Level 0, execute deterministic logic in scan cycles, and drive outputs to actuators. This is where stable, predictable control of equipment is enforced."}
+      {t:"p", s:"Level 1 is deterministic machine/process control. PLCs and RTUs continuously read inputs, evaluate logic, and write outputs in repeatable scan cycles with strict timing constraints."},
+      {t:"f", s:"CONTROL ENGINEERING REALITIES:\n- Deterministic scan cycle targets (for example 10-100ms)\n- Hard interlocks and permissives enforce safe states\n- Local fallback modes for comms loss scenarios\n- Watchdogs and fault states define fail behavior\n- Changes require formal testing and controlled deployment"},
+      {t:"e", l:"PLC VS RTU IN PRACTICE", s:"PLCs typically dominate factory cells with dense I/O and fast logic; RTUs are common at distributed assets with sparse telemetry, intermittent links, and harsh environmental requirements."},
+      {t:"e", l:"CHANGE CONTROL", s:"Small logic edits can have plant-wide effects. Mature teams use offline simulation/FAT, version control, and explicit rollback plans before downloading controller changes."},
+      {t:"i", s:"If Level 1 is unstable, everything above it inherits noise, downtime, and safety risk."}
     ]
   },
   {
@@ -251,15 +273,13 @@ var SECTIONS = [
     gives:["Sensors","Actuators","Analog Signals","Digital Signals","4-20mA","Field Devices","Process Variables"],
     body:[
       {t:"h", s:"What happens at Level 0"},
-      {t:"p", s:"<strong>Operational Technology (OT)</strong> refers to hardware and software that detects or causes change through direct monitoring and control of physical devices, processes, and events in the enterprise. Unlike Information Technology (IT), which handles data and information, OT deals with the physical world: turbines, pumps, valves, robots, and manufacturing lines."},
-      {t:"p", s:"OT has existed for decades in environments like power plants, factories, oil refineries, and water treatment facilities. Historically isolated from corporate networks for reliability and safety, OT systems are now increasingly connected to IT networks for remote monitoring, predictive maintenance, and data analytics."},
-      {t:"h", s:"Key differences between OT and IT"},
-      {t:"f", s:"OT PRIORITIES:\n  1. Safety (prevent harm to people/environment)\n  2. Availability (uptime is critical, downtime costs millions)\n  3. Integrity (accurate control and measurement)\n  4. Confidentiality (least important of the four)\n\nIT PRIORITIES:\n  1. Confidentiality (protect data from unauthorized access)\n  2. Integrity (data accuracy and trustworthiness)\n  3. Availability (minimize downtime, but more tolerance than OT)"},
-      {t:"e", l:"CONSEQUENCE OF FAILURE", s:"An IT system breach might leak customer data or cause a website outage. An OT system breach could cause a pipeline explosion, power grid failure, or release of toxic chemicals. The physical consequences make OT security fundamentally different from IT security."},
-      {t:"h", s:"Why the Purdue Model matters"},
-      {t:"p", s:"The <strong>Purdue Enterprise Reference Architecture (PERA)</strong>, also known as the Purdue Model or ISA-95, provides a hierarchical framework for organizing industrial control systems. Developed in the 1990s at Purdue University, it defines six levels (0-5) that separate physical processes from business operations."},
-      {t:"p", s:"This study guide focuses on <strong>Levels 0, 1, and 2</strong> &mdash; the operational technology layers where actual physical control happens. Understanding these foundational levels is essential for anyone working in industrial automation, OT security, or IIoT deployments."},
-      {t:"i", s:"The Purdue Model is not just a theoretical framework. It is embedded in every modern factory, power plant, and water treatment facility. Knowing which level you are operating at determines which protocols, security controls, and network architectures are appropriate."}
+      {t:"p", s:"Level 0 is the physical process itself: temperatures, pressures, flows, valve positions, motor states, chemical reactions, and mechanical motion. This is where energy and materials are transformed."},
+      {t:"f", s:"LEVEL 0 CHARACTERISTICS:\n- Millisecond-to-second physical dynamics\n- Analog and discrete signals from field instruments\n- Environmental stress: vibration, moisture, EMI, temperature\n- Safety-critical constraints and hard operating limits\n- Measurement uncertainty, drift, and calibration windows"},
+      {t:"h", s:"Instrumentation and actuation basics"},
+      {t:"e", l:"SENSORS", s:"Transmitters convert physical state into electrical signals (for example 4-20mA, 0-10V, pulse). Quality of measurement, placement, and maintenance directly determine control quality upstream."},
+      {t:"e", l:"ACTUATORS", s:"Valves, drives, relays, and dampers execute commands from Level 1. Their response time, stiction, deadband, and fail position shape process stability and safety."},
+      {t:"e", l:"FAIL-SAFE DESIGN", s:"Critical assets are designed to move to a known safe state on power or air loss (for example fail-closed fuel valve, fail-open cooling valve) based on process hazard analysis."},
+      {t:"i", s:"Good Level 0 design is observable, maintainable, and predictable under upset conditions; every higher layer depends on that foundation."}
     ]
   },
   {
