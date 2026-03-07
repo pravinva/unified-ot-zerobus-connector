@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Industrial Automation Study Guide: Purdue Model Levels 0-2</title>
+<title>Industrial Automation Study Guide: Purdue Model Levels 0-3.5</title>
 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&family=Cinzel:wght@400;600&display=swap" rel="stylesheet">
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -170,7 +170,7 @@ body {
   <div class="hdr">
     <h1>Industrial Automation Study Guide</h1>
     <div class="hdr-rule"></div>
-    <p>A complete journey through Purdue Model Levels 0-2, OT protocols, and the evolution of industrial control systems.</p>
+    <p>A complete journey through Purdue Model Levels 0-3.5, OT protocols, Databricks integration, and the evolution of industrial control systems.</p>
   </div>
   <div class="layout">
     <div class="tower">
@@ -180,8 +180,8 @@ body {
     <div class="cards" id="cards"></div>
   </div>
   <div class="footer">
-    From field devices to supervisory control &mdash; understanding the foundation of operational technology.<br>
-    A comprehensive study guide for industrial automation practitioners.
+    From field devices through MES to the IT boundary &mdash; understanding the complete OT stack with Databricks integration.<br>
+    A comprehensive study guide for industrial automation practitioners and data engineers.
   </div>
 </div>
 <script>
@@ -286,6 +286,80 @@ var SECTIONS = [
       {t:"h", s:"Alarm management: avoiding alarm floods"},
       {t:"p", s:"Poor alarm management is a leading cause of industrial incidents. If operators receive hundreds of alarms per hour, they become desensitized and miss critical warnings. Modern Level 2 systems use alarm rationalization: each alarm is categorized by priority, many nuisance alarms are suppressed, and operators are trained to respond to the most critical alarms first."},
       {t:"i", s:"The most important principle of Level 2: it supervises, but does not replace Level 1. If the SCADA system crashes, PLCs at Level 1 continue running their control logic. The plant keeps operating, even though operators have lost visibility. This independence is by design and is required by safety standards like IEC 61511."}
+    ]
+  },
+  {
+    badge:"LEVEL 3", title:"Manufacturing Execution Systems", sub:"MES and production management", color:"#9b59b6",
+    needs:["SCADA","DCS","Historian"], key:"MES",
+    gives:["MES","Batch Management","Production Scheduling","Quality Management","Genealogy Tracking","OEE"],
+    body:[
+      {t:"h", s:"What happens at Level 3"},
+      {t:"p", s:"<strong>Level 3</strong> is where operational technology meets information technology. Manufacturing Execution Systems (MES) coordinate production across the entire facility: scheduling jobs, tracking work orders, managing recipes/batches, and collecting quality data. While Level 2 controls the process, Level 3 manages the production."},
+      {t:"p", s:"MES bridges the gap between the plant floor (Levels 0-2) and enterprise systems (Levels 4-5). It answers questions like: Which batch is in Reactor 3? What materials went into Batch 2024-0315? Why did Line 2 stop for 15 minutes? What is our Overall Equipment Effectiveness (OEE) this week?"},
+      {t:"h", s:"Core MES functions"},
+      {t:"f", s:"ISA-95 DEFINES 11 MES FUNCTIONS:\n1. Production Scheduling - Which products to make, when, and where\n2. Dispatching - Send work orders to production lines\n3. Resource Management - Track materials, tools, equipment\n4. Batch/Recipe Management - Execute production recipes\n5. Quality Management - In-process testing, SPC charts\n6. Genealogy Tracking - Material traceability (critical for recalls)\n7. Performance Analysis - OEE, downtime analysis\n8. Maintenance Management - Integrate with CMMS\n9. Labor Management - Track operator activities\n10. Data Collection - Aggregate data from Level 0-2\n11. Document Control - SOPs, work instructions"},
+      {t:"e", l:"PHARMACEUTICAL MES EXAMPLE", s:"A pharmaceutical plant uses MES to ensure FDA compliance. Every batch is tracked with a unique ID. The MES records which raw materials (with lot numbers) went into the batch, who operated the equipment (with digital signatures), what temperatures and pressures were maintained (from SCADA), and all quality test results. If a batch fails, MES provides complete genealogy for root cause analysis. This traceability is required by 21 CFR Part 11."},
+      {t:"e", l:"AUTOMOTIVE MES EXAMPLE", s:"An automotive assembly plant uses MES to coordinate 1,200 robots and 3,000 workers across 8 lines producing 400,000 vehicles per year. MES schedules which car model goes down which line, dispatches parts from the warehouse via AGVs, tracks each vehicle by VIN through 300+ stations, flags quality defects for rework, and calculates real-time OEE. If Line 3 stops due to a robot fault, MES automatically reschedules production to other lines."},
+      {t:"h", s:"OEE: the key MES metric"},
+      {t:"p", s:"<strong>Overall Equipment Effectiveness (OEE)</strong> is the gold standard metric for manufacturing performance. OEE = Availability × Performance × Quality. A world-class facility targets 85% OEE."},
+      {t:"f", s:"OEE CALCULATION:\nAvailability = (Operating Time / Planned Production Time)\n  Example: 420 minutes actual / 480 minutes planned = 87.5%\n\nPerformance = (Actual Output / Theoretical Max Output)\n  Example: 950 units actual / 1000 units theoretical = 95%\n\nQuality = (Good Units / Total Units)\n  Example: 920 good units / 950 total units = 96.8%\n\nOEE = 87.5% × 95% × 96.8% = 80.5%"},
+      {t:"e", l:"OEE INSIGHTS", s:"An OEE of 80.5% means you are losing 19.5% of potential production. Breaking down the Six Big Losses: unplanned downtime (breakdown), setup/changeover time (planned stops), minor stoppages (jams, sensor faults), reduced speed (running below design rate), startup rejects, and production rejects. MES tracks all six and identifies root causes."},
+      {t:"h", s:"MES vendors and platforms"},
+      {t:"p", s:"Major MES vendors include <strong>Siemens Opcenter</strong> (formerly Camstar), <strong>Rockwell FactoryTalk ProductionCentre</strong>, <strong>SAP Manufacturing Execution</strong>, <strong>Dassault DELMIA</strong>, <strong>Emerson Syncade</strong> (pharma), <strong>Apriso</strong> (now part of Dassault), and <strong>Plex Systems</strong> (cloud MES for automotive)."},
+      {t:"p", s:"Modern MES platforms are moving to the cloud and integrating AI/ML for predictive analytics. Instead of just recording what happened, next-gen MES predicts what will happen: Which machine will fail next week? Which batch is at risk of quality failure? How should we reschedule production if Supplier X is late?"},
+      {t:"i", s:"Level 3 MES is where Databricks excels. MES generates massive volumes of structured data: work orders, batch records, quality measurements, downtime events. Databricks ingests this data from MES systems, combines it with Level 0-2 sensor data, and enables advanced analytics: predictive quality, root cause analysis, digital twin simulations, and supply chain optimization."}
+    ]
+  },
+  {
+    badge:"LEVEL 3.5", title:"Industrial DMZ", sub:"IT/OT security boundary", color:"#e74c3c",
+    needs:["MES","SCADA"], key:"DMZ",
+    gives:["Firewall","Data Diode","Jump Server","Unidirectional Gateway","Network Segmentation","Defense in Depth"],
+    body:[
+      {t:"h", s:"The critical security boundary"},
+      {t:"p", s:"<strong>Level 3.5</strong> is not an official ISA-95 level, but it has become standard practice in modern industrial architectures. The Industrial DMZ (Demilitarized Zone) sits between Level 3 (MES) and Level 4 (Business/ERP), creating a security buffer zone that protects operational technology from IT threats while allowing necessary data flow."},
+      {t:"p", s:"Before the DMZ concept, OT networks were air-gapped (physically isolated). Modern business needs require integration: ERP systems need production data, supply chain systems need material consumption data, executives need real-time dashboards. The DMZ enables this integration safely."},
+      {t:"h", s:"DMZ architecture"},
+      {t:"f", s:"TYPICAL DMZ LAYOUT:\n\n[Level 4-5: Business Network]\n         ↓ Firewall (restrictive rules)\n[Level 3.5: Industrial DMZ]\n  - Historian data gateway\n  - MES application servers\n  - Jump servers for remote access\n  - Antivirus/IDS appliances\n         ↓ Firewall (very restrictive)\n[Level 2: SCADA/DCS Network]\n         ↓ Firewall (minimal allowed traffic)\n[Level 0-1: Control Network]"},
+      {t:"p", s:"The DMZ contains systems that need to communicate with both OT and IT: historians that collect SCADA data but serve IT dashboards, MES servers that receive work orders from ERP but send commands to PLCs, and remote access jump servers that allow vendors to troubleshoot without touching the control network."},
+      {t:"h", s:"Firewall rules and policies"},
+      {t:"e", l:"FIREWALL POLICY EXAMPLE", s:"Between Level 3.5 DMZ and Level 2 SCADA:<br><strong>Allowed:</strong> Historian polling SCADA (read-only, OPC-UA port 4840), MES reading PLC status (Modbus TCP port 502)<br><strong>Blocked:</strong> Any traffic from SCADA to DMZ (prevents malware spread), Any IT traffic directly to SCADA (must go through DMZ), All outbound internet from SCADA (no Windows updates, no web browsing)"},
+      {t:"p", s:"Firewall rules follow the principle of <em>least privilege</em>: only the minimum necessary traffic is allowed, and all traffic is logged. A typical rule set might allow 10-20 specific flows (source IP, destination IP, port, protocol) and deny everything else by default."},
+      {t:"h", s:"Data diodes and unidirectional gateways"},
+      {t:"p", s:"For the most critical infrastructure (nuclear plants, military facilities, electric grid control centers), even firewalls are not secure enough. <strong>Data diodes</strong> are hardware devices that allow data to flow in only one direction: Level 2 → Level 3.5, but never the reverse. This is physically enforced using fiber optic transceivers with the receive fiber removed."},
+      {t:"e", l:"DATA DIODE USE CASE", s:"A nuclear power plant uses data diodes to send reactor telemetry from the safety-critical control network to the corporate network for monitoring. Engineers can view real-time data, but they physically cannot send commands back to the reactor control system, even if malware compromises the corporate network. The diode enforces this: photons travel one way through fiber."},
+      {t:"p", s:"Unidirectional gateways work similarly but use software-based protocol translation: SCADA data is replicated through the diode, and a replica server on the IT side responds to client queries without touching the OT side."},
+      {t:"h", s:"Jump servers and remote access"},
+      {t:"p", s:"Vendor remote access is a major security risk: equipment vendors need to troubleshoot PLCs, but giving them VPN access to the control network is dangerous. <strong>Jump servers</strong> in the DMZ provide a controlled access point. The vendor connects to the jump server (with multi-factor authentication), and the jump server is the only system allowed to reach the control network."},
+      {t:"p", s:"All sessions on the jump server are logged and can be recorded. Some implementations require dual approval: the vendor initiates a session, and a plant engineer must approve it before access is granted. The jump server can also enforce time windows: access is only allowed during maintenance shifts, not 24/7."},
+      {t:"i", s:"The Industrial DMZ is where Databricks Lakehouse acts as the data gateway. Instead of allowing direct database connections from IT to OT systems (a security nightmare), the DMZ hosts Databricks connectors that ingest data from SCADA/MES, store it in Delta Lake behind Unity Catalog access controls, and serve it to IT via secure SQL endpoints. This architecture is documented in the Unified OT Connector project."}
+    ]
+  },
+  {
+    badge:"DATABRICKS", title:"Databricks & OT Data Integration", sub:"analytics at Level 3/3.5", color:"#ff3621",
+    needs:["MES","DMZ","Historian"], key:"Databricks Lakehouse",
+    gives:["Delta Lake","Unity Catalog","Lakeflow","DLT","Autoloader","Lakehouse Monitoring","ML on OT Data"],
+    body:[
+      {t:"h", s:"Where Databricks fits in OT architecture"},
+      {t:"p", s:"<strong>Databricks sits at Level 3 and Level 3.5</strong>, acting as the analytics and AI layer for operational technology. While SCADA/DCS (Level 2) handles real-time control, Databricks handles near-real-time analytics, predictive models, and long-term storage of OT data in the lakehouse."},
+      {t:"f", s:"DATABRICKS OT ARCHITECTURE:\n\nLevel 0-2 (OT):\n  └─► Unified OT Connector (this project)\n       ├─► Modbus TCP reader\n       ├─► OPC-UA client\n       ├─► MQTT Sparkplug subscriber\n       └─► Writes to Delta Lake\n\nLevel 3 (Analytics):\n  └─► Databricks Lakehouse\n       ├─► Bronze: Raw sensor data (append-only)\n       ├─► Silver: Cleaned, validated (dedupe, type cast)\n       ├─► Gold: Aggregated metrics (OEE, downtime)\n       └─► ML Models: Predictive maintenance, quality\n\nLevel 4 (Business):\n  └─► Power BI / Tableau dashboards\n       └─► Query Delta Lake via SQL warehouse"},
+      {t:"h", s:"Data ingestion patterns for OT"},
+      {t:"e", l:"MQTT SPARKPLUG → AUTOLOADER", s:"An edge gateway publishes MQTT Sparkplug B messages (industrial IoT standard) to an MQTT broker. Databricks Autoloader subscribes to the broker, streams messages to Delta Lake Bronze layer at 10,000 messages/second. Latency: 1-3 seconds from sensor to lakehouse. Cost: $0.10 per million messages."},
+      {t:"e", l:"OPC-UA → DELTA LAKE", s:"The Unified OT Connector (this project) connects to an OPC-UA server with 347 sensors, polls at 2 Hz (500ms), and writes batches to Delta Lake every 60 seconds. Each batch contains 347 sensors × 120 samples = 41,640 rows. Parquet compression reduces 1 GB of raw JSON to 200 MB in Delta. Unity Catalog enforces row-level security: operators see only their plant, engineers see all plants."},
+      {t:"e", l:"HISTORIAN → LAKEFLOW", s:"Legacy OSI PI historians hold 10 years of high-frequency time-series data. Databricks Lakeflow connectors extract data from PI using OLEDB or REST API, apply schema-on-read transformations, and land in Delta Lake Silver layer. Incremental loads use PI Archive event frames as watermarks. 1 billion tags ingested in 4 hours."},
+      {t:"h", s:"Lakehouse architecture for manufacturing"},
+      {t:"p", s:"<strong>Bronze Layer:</strong> Append-only, immutable sensor data. Partition by plant_id, date, hour. Retain 90 days. Compressed with ZSTD. Liquid clustering on (asset_id, timestamp) for time-series queries. Enable deletion vectors for GDPR compliance."},
+      {t:"p", s:"<strong>Silver Layer:</strong> Cleaned data. Remove duplicates (common with OT protocols that retry). Cast string timestamps to timestamp_ntz. Validate sensor ranges (temperature -40 to 120°C). Flag outliers using Z-score. Join with asset metadata (turbine_id → turbine_model, manufacturer). Z-order on (asset_id, metric_name, timestamp)."},
+      {t:"p", s:"<strong>Gold Layer:</strong> Aggregated KPIs. Hourly OEE by line. Daily production by SKU. Mean time between failures (MTBF) by equipment class. Materialized views for dashboards. Pre-join dimensions for fast BI queries."},
+      {t:"h", s:"Real-world example: MCE Field Operations"},
+      {t:"p", s:"The <strong>Main Character Energy (MCE) Field Operations platform</strong> demonstrates Databricks + OT integration at scale:<br>- 2,000 wind turbines across 50 sites<br>- 500 GB/day sensor data (vibration, temperature, power output)<br>- Lakeflow DLT pipeline: Bronze → Silver → Gold<br>- Claude AI via Databricks FMAPI generates work orders from anomalies<br>- Real-time dashboard showing turbine health, predicted failures, ROI from predictive maintenance"},
+      {t:"e", l:"MCE WORK ORDER AI AGENT", s:"When turbine vibration exceeds 80 Hz threshold, the Lakeflow pipeline detects anomaly, triggers Claude AI via FMAPI with prompt: 'Analyze this critical alert: Turbine MCE-0093, vibration 95.3 Hz, temp 48.2°C'. Claude generates unique work order with root cause analysis, required parts (SKF bearing kit), estimated repair time (8 hours), and urgency (P1 critical). Work order written to Delta Lake, dispatched to field technicians."},
+      {t:"h", s:"ML models on OT data"},
+      {t:"p", s:"Databricks enables ML/AI use cases that traditional OT systems cannot support:"},
+      {t:"f", s:"PREDICTIVE MAINTENANCE:\n- Feature engineering: rolling averages, FFT on vibration\n- Model: XGBoost predicts failure 7 days in advance\n- Training: 3 years historical data, 10,000 failure events\n- Deployment: Model as SQL UDF, scores every asset hourly\n- Monitoring: Lakehouse Monitoring tracks prediction drift\n\nQUALITY PREDICTION:\n- Input: 50 process parameters during batch\n- Output: Predict final product quality (pass/fail)\n- Benefit: Adjust recipe mid-batch to save failed batches\n- ROI: $500k/year reduction in scrap\n\nROOT CAUSE ANALYSIS:\n- Graph neural network on asset dependency graph\n- When Line 3 stops, model traces upstream cause\n- Example: Boiler pressure drop → steam shortage → turbine trip → line stop\n- Explains 80% of downtime events automatically"},
+      {t:"h", s:"Security considerations"},
+      {t:"p", s:"<strong>Unity Catalog</strong> enforces OT security policies in the lakehouse: Row-level security ensures operators only see their assigned plants. Column masking hides sensitive process parameters (e.g., secret recipe ratios). Audit logging tracks every query on OT data for compliance. Data lineage shows which dashboards depend on which sensors (impact analysis for sensor maintenance)."},
+      {t:"p", s:"<strong>Service principals</strong> isolate OT connectors from IT users: The Unified OT Connector runs as service principal 'ot-connector-prod' with write-only access to Bronze layer. Analysts use personal accounts with read-only access to Gold layer. No human has direct write access to prevent accidental data corruption."},
+      {t:"i", s:"The future of OT is the lakehouse. Databricks provides the missing analytics layer that traditional OT vendors (Siemens, Rockwell, Honeywell) do not offer. By landing all sensor data in Delta Lake, manufacturers unlock AI/ML, data science, and executive visibility without compromising the reliability of Level 0-2 control systems. This is IT/OT convergence done right."}
     ]
   },
   {
