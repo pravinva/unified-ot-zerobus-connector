@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Industrial Automation Study Guide: Purdue Model Levels 0-3.5</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&family=Cinzel:wght@400;600&display=swap" rel="stylesheet">
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -480,8 +481,8 @@ var SECTIONS = [
     ]
   },
   {
-    badge:"REFERENCE", title:"Level 0-2 Cheat Sheet", sub:"quick reference guide", color:"#ff3621",
-    needs:["Level 0","Level 1","Level 2"], key:"Cheat Sheet",
+    badge:"REFERENCE", title:"Level 0-3.5 Cheat Sheet", sub:"complete quick reference", color:"#ff3621",
+    needs:["Level 0","Level 1","Level 2","MES","DMZ","Databricks Lakehouse"], key:"Cheat Sheet",
     gives:["Quick Reference","Troubleshooting","Common Terminology","Standards","Resources"],
     body:[
       {t:"h", s:"Level 0 at a glance"},
@@ -490,6 +491,12 @@ var SECTIONS = [
       {t:"f", s:"LEVEL 1: Basic Control\nDevices: PLCs, RTUs, controllers\nLanguages: Ladder logic, function blocks, structured text\nScan cycle: 10-100ms\nProtocols: Modbus RTU, Profibus, DeviceNet\nKey vendors: Siemens, Rockwell, Schneider\nCommon issues: I/O faults, watchdog timeouts, program errors\nTroubleshooting: Check I/O status lights, use PLC diagnostics"},
       {t:"h", s:"Level 2 at a glance"},
       {t:"f", s:"LEVEL 2: Supervisory Control\nSystems: SCADA, DCS, HMI, historian\nProtocols: Modbus TCP, OPC-UA, MQTT\nUpdate rate: 1-10 seconds\nHardware: Windows/Linux servers, industrial PCs\nKey vendors: Wonderware, Ignition, Honeywell, Emerson\nCommon issues: Network latency, database overload, alarm floods\nTroubleshooting: Check network connectivity, review logs"},
+      {t:"h", s:"Level 3 at a glance"},
+      {t:"f", s:"LEVEL 3: Manufacturing Execution Systems (MES)\nSystems: MES, batch management, production scheduling\nFunctions: Work orders, genealogy tracking, OEE, quality\nUpdate rate: Minutes to hours (not real-time)\nHardware: Enterprise servers, databases (SQL Server, Oracle)\nKey vendors: Siemens Opcenter, SAP ME, Rockwell FactoryTalk\nKey metric: OEE = Availability × Performance × Quality\nCommon issues: Data integration, recipe management, batch tracking\nTroubleshooting: Check database connections, review MES logs, validate work order flow"},
+      {t:"h", s:"Level 3.5 at a glance"},
+      {t:"f", s:"LEVEL 3.5: Industrial DMZ (IT/OT Boundary)\nPurpose: Security buffer between OT and IT networks\nComponents: Firewalls, data diodes, jump servers, IDS\nKey principle: Least privilege (minimum necessary traffic)\nFirewall rules: Allow historian reads, block all IT→OT writes\nData flow: OT → IT (one-way preferred)\nKey vendors: Palo Alto, Fortinet, Nozomi, Claroty, Dragos\nCommon issues: Firewall misconfig, certificate expiry, unauthorized access\nTroubleshooting: Review firewall logs, check DMZ connectivity, audit access logs"},
+      {t:"h", s:"Databricks at Level 3/3.5"},
+      {t:"f", s:"DATABRICKS: Analytics & AI Layer\nPosition: Level 3 analytics tier, ingests from Level 0-2\nArchitecture: Bronze (raw) → Silver (cleaned) → Gold (aggregated)\nIngestion: Autoloader (MQTT), Lakeflow (OPC-UA, historians)\nStorage: Delta Lake with Unity Catalog access control\nLatency: Near-real-time (1-3 seconds from sensor to lakehouse)\nUse cases: Predictive maintenance, quality prediction, OEE dashboards\nKey features: SQL on sensor data, ML models, Lakehouse Monitoring\nCommon issues: Schema drift, partition strategy, data skew\nTroubleshooting: Check connector logs, review pipeline metrics, validate Delta table health"},
       {t:"h", s:"Common terminology"},
       {t:"f", s:"TERMS YOU MUST KNOW:\nPV: Process Variable (measured value)\nSP: Setpoint (desired value)\nMV: Manipulated Variable (control output)\nPID: Proportional-Integral-Derivative (control algorithm)\nHMI: Human-Machine Interface (operator screen)\nI/O: Input/Output (connections to field)\nSIS: Safety Instrumented System (emergency shutdown)\nTrip: Emergency shutdown action\nInterlocks: Logic that prevents unsafe operations\nPermissives: Conditions that must be true to allow action"},
       {t:"h", s:"Key standards"},
