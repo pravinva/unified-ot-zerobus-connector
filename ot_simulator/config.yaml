@@ -57,7 +57,7 @@ opcua:
 
 # MQTT Publisher Configuration
 mqtt:
-  enabled: false  # DISABLED - OPC UA only
+  enabled: true
 
   # Broker settings (publish to external broker)
   broker:
@@ -99,7 +99,7 @@ mqtt:
 
 # Modbus Server Configuration
 modbus:
-  enabled: false  # DISABLED - OPC UA only
+  enabled: true
 
   # TCP Server
   tcp:
