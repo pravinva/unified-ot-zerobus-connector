@@ -17,6 +17,7 @@ class SimulatorManager:
     def __init__(self):
         """Initialize simulator manager."""
         self.simulators: dict[str, Any] = {}
+        self.simulator_tasks: dict[str, asyncio.Task] = {}
         self.sensor_instances: dict[str, Any] = {}  # sensor_path -> Sensor instance
         self.faults: dict[str, dict] = {}  # sensor_path -> {end_time, original_value, fault_type}
         self.plc_manager: Optional[Any] = None  # PLCManager instance (loaded lazily)
@@ -74,6 +75,39 @@ class SimulatorManager:
             raise ValueError(f"Unknown protocol: {protocol}")
 
         simulator = self.simulators[protocol]
+        running_task = self.simulator_tasks.get(protocol)
+        if running_task and not running_task.done():
+            logger.info(f"{protocol.upper()} simulator task already running")
+            return
+
+        # MQTT start() is a long-running loop; run it as a background task.
+        if protocol == "mqtt" and hasattr(simulator, "start"):
+            self.simulator_tasks[protocol] = asyncio.create_task(simulator.start())
+            logger.info(f"Started {protocol.upper()} simulator task")
+            return
+
+        # Modbus simulator exposes start_tcp/start_rtu (not start()).
+        if protocol == "modbus":
+            async def _run_modbus():
+                tasks = []
+                if getattr(simulator.config.tcp, "enabled", False):
+                    tasks.append(asyncio.create_task(simulator.start_tcp()))
+                if getattr(simulator.config.rtu, "enabled", False):
+                    tasks.append(asyncio.create_task(simulator.start_rtu()))
+                if not tasks:
+                    raise ValueError("No Modbus servers enabled (TCP and RTU both disabled)")
+                try:
+                    await asyncio.gather(*tasks)
+                finally:
+                    for t in tasks:
+                        if not t.done():
+                            t.cancel()
+                    await asyncio.gather(*tasks, return_exceptions=True)
+
+            self.simulator_tasks[protocol] = asyncio.create_task(_run_modbus())
+            logger.info(f"Started {protocol.upper()} simulator task")
+            return
+
         if hasattr(simulator, "start"):
             await simulator.start()
         logger.info(f"Started {protocol.upper()} simulator")
@@ -90,6 +124,11 @@ class SimulatorManager:
         simulator = self.simulators[protocol]
         if hasattr(simulator, "stop"):
             await simulator.stop()
+
+        running_task = self.simulator_tasks.pop(protocol, None)
+        if running_task and not running_task.done():
+            running_task.cancel()
+            await asyncio.gather(running_task, return_exceptions=True)
         logger.info(f"Stopped {protocol.upper()} simulator")
 
     def get_sensor_value(self, sensor_path: str) -> float | None:

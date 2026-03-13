@@ -2,6 +2,7 @@ export type WsClientMessage =
   | { type: "subscribe"; sensors: string[] }
   | { type: "unsubscribe"; sensors: string[] }
   | { type: "nlp_command"; text: string; history?: unknown[] }
+  | { type: "protocol_control"; protocol: "opcua" | "mqtt" | "modbus"; action: "start" | "stop" }
   | { type: "get_status" }
   | { type: "set_update_rate"; interval: number };
 
@@ -12,6 +13,7 @@ export type WsServerMessage =
   | { type: "unsubscribed"; sensors: string[] }
   | { type: "update_rate_changed"; interval: number }
   | { type: "nlp_response"; [k: string]: unknown }
+  | { type: "protocol_control_result"; protocol: string; action: string; success: boolean; message: string }
   | { type: "error"; message: string }
   | Record<string, unknown>;
 

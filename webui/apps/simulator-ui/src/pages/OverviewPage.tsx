@@ -93,6 +93,26 @@ export function OverviewPage() {
     });
   }, [ws.status]);
 
+  useEffect(() => {
+    const msg = ws.lastMessage as any;
+    if (!msg || msg.type !== "protocol_control_result") return;
+    const protocol = msg.protocol as "opcua" | "mqtt" | "modbus";
+    if (!["opcua", "mqtt", "modbus"].includes(protocol)) return;
+
+    setPendingProtocolAction((prev) => {
+      if (!prev[protocol]) return prev;
+      const next = { ...prev };
+      delete next[protocol];
+      return next;
+    });
+
+    toast.show(
+      msg.message || `${protocol.toUpperCase()} ${msg.action === "start" ? "start" : "stop"} ${msg.success ? "ok" : "failed"}`,
+      msg.success ? "ok" : "bad"
+    );
+    ws.getStatus();
+  }, [toast, ws, ws.lastMessage]);
+
   return (
     <div style={{ display: "grid", gap: 16 }}>
       <Panel
@@ -115,11 +135,11 @@ export function OverviewPage() {
           <StatusPill kind={zbStatus ? (zbActive("modbus") ? "ok" : "warn") : "warn"}>Modbus stream: {zbStatus ? (zbActive("modbus") ? "on" : "off") : "?"}</StatusPill>
         </div>
         <div className="muted" style={{ marginTop: 10 }}>
-          Start/stop protocol simulators is executed via WebSocket NLP commands (same contract as legacy).
+          Start/stop protocol simulators use direct WebSocket controls for immediate feedback.
         </div>
       </Panel>
 
-      <Panel title="Protocol controls" subtitle="Start/stop via WebSocket (nlp_command)">
+      <Panel title="Protocol controls" subtitle="Start/stop via direct WebSocket control">
         {(["opcua", "mqtt", "modbus"] as const).map((p) => {
           const row = simRow(p);
           const running = Boolean(row?.running);

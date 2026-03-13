@@ -96,8 +96,10 @@ export function useSimulatorWs() {
       getStatus: () => send({ type: "get_status" } satisfies WsClientMessage),
       setUpdateRate: (interval: number) => send({ type: "set_update_rate", interval } satisfies WsClientMessage),
       sendNlpCommand,
-      startProtocol: (protocol: string) => sendNlpCommand(`start ${protocol}`),
-      stopProtocol: (protocol: string) => sendNlpCommand(`stop ${protocol}`),
+      startProtocol: (protocol: "opcua" | "mqtt" | "modbus") =>
+        send({ type: "protocol_control", protocol, action: "start" } satisfies WsClientMessage),
+      stopProtocol: (protocol: "opcua" | "mqtt" | "modbus") =>
+        send({ type: "protocol_control", protocol, action: "stop" } satisfies WsClientMessage),
     }),
     [connected, lastMessage, nlpLog, send, sendNlpCommand, sensorData, status]
   );

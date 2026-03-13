@@ -117,6 +117,11 @@ class WebSocketServer:
                     result = await self.execute_command(command)
                     logger.info(f"Command execution result: success={result.get('success', True)}, message={result.get('message', '')[:100]}")
 
+                    # Push a fresh status update after lifecycle actions so
+                    # protocol controls reflect real state quickly.
+                    if command.action in {"start", "stop"}:
+                        await self.broadcast_status_update()
+
                     # Phase 2: Have LLM synthesize the backend response into natural language
                     # Skip synthesis for actions that return detailed formatted data
                     if command.action in ["chat", "list_sensors", "status"]:
@@ -177,6 +182,47 @@ class WebSocketServer:
         elif msg_type == "get_status":
             # Get current simulator status
             await self.send_status_update(ws)
+
+        elif msg_type == "protocol_control":
+            protocol = str(data.get("protocol", "")).strip().lower()
+            action = str(data.get("action", "")).strip().lower()
+            if protocol not in {"opcua", "mqtt", "modbus"}:
+                await ws.send_json({"type": "error", "message": f"Invalid protocol: {protocol}"})
+                return
+            if action not in {"start", "stop"}:
+                await ws.send_json({"type": "error", "message": f"Invalid action: {action}"})
+                return
+
+            try:
+                if action == "start":
+                    await self.manager.start_simulator(protocol)
+                    message = f"{protocol.upper()} start requested"
+                else:
+                    await self.manager.stop_simulator(protocol)
+                    message = f"{protocol.upper()} stop requested"
+
+                await ws.send_json(
+                    {
+                        "type": "protocol_control_result",
+                        "protocol": protocol,
+                        "action": action,
+                        "success": True,
+                        "message": message,
+                    }
+                )
+            except Exception as e:
+                logger.error(f"Protocol control error ({action} {protocol}): {e}", exc_info=True)
+                await ws.send_json(
+                    {
+                        "type": "protocol_control_result",
+                        "protocol": protocol,
+                        "action": action,
+                        "success": False,
+                        "message": str(e),
+                    }
+                )
+            finally:
+                await self.broadcast_status_update()
 
         elif msg_type == "set_update_rate":
             # Change update rate
