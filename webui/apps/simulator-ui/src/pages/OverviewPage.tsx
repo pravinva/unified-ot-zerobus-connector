@@ -11,6 +11,7 @@ export function OverviewPage() {
   const [health, setHealth] = useState<any>(null);
   const [zbStatus, setZbStatus] = useState<ZeroBusStatusResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [pendingProtocolAction, setPendingProtocolAction] = useState<Partial<Record<"opcua" | "mqtt" | "modbus", "start" | "stop">>>({});
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -35,6 +36,53 @@ export function OverviewPage() {
   const zbActive = (p: string) => Boolean(zb?.[p]?.active);
   const sim = (ws.status as any)?.simulators ?? {};
   const simRow = (p: string) => sim?.[p] ?? {};
+
+  const requestProtocolAction = useCallback(
+    (protocol: "opcua" | "mqtt" | "modbus", action: "start" | "stop") => {
+      if (!ws.connected) {
+        toast.show("WebSocket not connected", "warn");
+        return;
+      }
+      const ok = action === "start" ? ws.startProtocol(protocol) : ws.stopProtocol(protocol);
+      if (!ok) {
+        toast.show("WebSocket not connected", "warn");
+        return;
+      }
+
+      setPendingProtocolAction((prev) => ({ ...prev, [protocol]: action }));
+      toast.show(`${action === "start" ? "Start" : "Stop"} requested for ${protocol.toUpperCase()}`, "ok");
+      // Force immediate status refresh attempts so UI reflects action quickly.
+      ws.getStatus();
+      window.setTimeout(() => ws.getStatus(), 400);
+      window.setTimeout(() => ws.getStatus(), 1200);
+      window.setTimeout(() => {
+        setPendingProtocolAction((prev) => {
+          if (prev[protocol] !== action) return prev;
+          const next = { ...prev };
+          delete next[protocol];
+          return next;
+        });
+      }, 3000);
+    },
+    [toast, ws]
+  );
+
+  useEffect(() => {
+    setPendingProtocolAction((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      (["opcua", "mqtt", "modbus"] as const).forEach((protocol) => {
+        const pending = prev[protocol];
+        if (!pending) return;
+        const running = Boolean(simRow(protocol)?.running);
+        if ((pending === "start" && running) || (pending === "stop" && !running)) {
+          delete next[protocol];
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, [ws.status]);
 
   return (
     <div style={{ display: "grid", gap: 16 }}>
@@ -66,6 +114,7 @@ export function OverviewPage() {
         {(["opcua", "mqtt", "modbus"] as const).map((p) => {
           const row = simRow(p);
           const running = Boolean(row?.running);
+          const pending = pendingProtocolAction[p];
           return (
             <div key={p} style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "8px 0" }}>
               <div style={{ minWidth: 120, fontFamily: "var(--font-data)" }}>
@@ -79,24 +128,18 @@ export function OverviewPage() {
                 <Button
                   variant="primary"
                   type="button"
-                  onClick={() => {
-                    const ok = ws.startProtocol(p);
-                    if (!ok) toast.show("WebSocket not connected", "warn");
-                  }}
-                  disabled={!ws.connected}
+                  onClick={() => requestProtocolAction(p, "start")}
+                  disabled={!ws.connected || pending === "start" || running}
                 >
-                  Start
+                  {pending === "start" ? "Starting..." : "Start"}
                 </Button>
                 <Button
                   variant="danger"
                   type="button"
-                  onClick={() => {
-                    const ok = ws.stopProtocol(p);
-                    if (!ok) toast.show("WebSocket not connected", "warn");
-                  }}
-                  disabled={!ws.connected}
+                  onClick={() => requestProtocolAction(p, "stop")}
+                  disabled={!ws.connected || pending === "stop" || !running}
                 >
-                  Stop
+                  {pending === "stop" ? "Stopping..." : "Stop"}
                 </Button>
               </div>
             </div>
