@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { simApi } from "../api/simApi";
 import type { Protocol, SensorsResponse, ZeroBusStatusResponse } from "../api/types";
 import { useAppToast } from "../toast/ToastContext";
+import { useSimulatorWs } from "../ws/useSimulatorWs";
 
 type SensorItem = {
   path: string;
@@ -14,6 +15,7 @@ type SensorItem = {
 
 export function ZeroBusPage() {
   const toast = useAppToast();
+  const ws = useSimulatorWs();
   const [protocol, setProtocol] = useState<Protocol>("opcua");
   const [status, setStatus] = useState<ZeroBusStatusResponse | null>(null);
   const [cfgLoading, setCfgLoading] = useState(false);
@@ -213,7 +215,7 @@ export function ZeroBusPage() {
     }
   }, [config, protocol, toast]);
 
-  const start = useCallback(async () => {
+  const startZeroBus = useCallback(async () => {
     setActionLoading(true);
     try {
       const res = await simApi.startZeroBus(protocol);
@@ -227,7 +229,7 @@ export function ZeroBusPage() {
     }
   }, [protocol, refreshStatus, toast]);
 
-  const stop = useCallback(async () => {
+  const stopZeroBus = useCallback(async () => {
     setActionLoading(true);
     try {
       const res = await simApi.stopZeroBus(protocol);
@@ -244,12 +246,14 @@ export function ZeroBusPage() {
   const hasConfig = Boolean((status as any)?.status?.[protocol]?.has_config);
   const active = Boolean((status as any)?.status?.[protocol]?.active);
   const simulatorAvailable = Boolean((status as any)?.status?.[protocol]?.simulator_available);
+  const protocolStatus = (ws.status as any)?.simulators?.[protocol] ?? {};
+  const protocolRunning = Boolean(protocolStatus?.running);
 
   return (
     <div style={{ display: "grid", gap: 16 }}>
       <Panel
         title="ZeroBus"
-        subtitle="Per-protocol configuration + start/stop/test"
+        subtitle="Per-protocol configuration + ZeroBus stream controls"
         actions={
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <Button type="button" onClick={() => refreshStatus()} disabled={cfgLoading || actionLoading}>
@@ -264,12 +268,6 @@ export function ZeroBusPage() {
             <Button type="button" onClick={() => test()} disabled={actionLoading}>
               Test
             </Button>
-            <Button variant="primary" type="button" onClick={() => start()} disabled={actionLoading || !hasConfig || !simulatorAvailable}>
-              Start streaming
-            </Button>
-            <Button variant="danger" type="button" onClick={() => stop()} disabled={actionLoading || !active}>
-              Stop streaming
-            </Button>
           </div>
         }
       >
@@ -281,6 +279,37 @@ export function ZeroBusPage() {
               <option value="modbus">Modbus</option>
             </Select>
           </Field>
+
+          <div style={{ border: "1px solid var(--border-panel)", borderRadius: 2, padding: 12, display: "grid", gap: 10 }}>
+            <div className="section-title">Protocol runtime control</div>
+            <div className="muted">
+              Runtime status: {protocolRunning ? "running" : "stopped"}; WebSocket: {ws.connected ? "connected" : "disconnected"}
+            </div>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <Button
+                variant="primary"
+                type="button"
+                onClick={() => {
+                  const ok = ws.startProtocol(protocol);
+                  if (!ok) toast.show("WebSocket not connected", "warn");
+                }}
+                disabled={!ws.connected || protocolRunning}
+              >
+                Start protocol
+              </Button>
+              <Button
+                variant="danger"
+                type="button"
+                onClick={() => {
+                  const ok = ws.stopProtocol(protocol);
+                  if (!ok) toast.show("WebSocket not connected", "warn");
+                }}
+                disabled={!ws.connected || !protocolRunning}
+              >
+                Stop protocol
+              </Button>
+            </div>
+          </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <Field label="Workspace host">
@@ -406,14 +435,31 @@ export function ZeroBusPage() {
             </div>
           </div>
 
-          <div className="muted">
-            Status: {active ? "streaming active" : "inactive"}; saved config: {hasConfig ? "yes" : "no"}
+          <div style={{ border: "1px solid var(--border-panel)", borderRadius: 2, padding: 12, display: "grid", gap: 10 }}>
+            <div className="section-title">ZeroBus stream control</div>
+            <div className="muted">
+              Stream status: {active ? "active" : "inactive"}; saved config: {hasConfig ? "yes" : "no"}
+            </div>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <Button
+                variant="primary"
+                type="button"
+                onClick={() => startZeroBus()}
+                disabled={actionLoading || !hasConfig || !simulatorAvailable || !protocolRunning}
+              >
+                Start ZeroBus stream
+              </Button>
+              <Button variant="danger" type="button" onClick={() => stopZeroBus()} disabled={actionLoading || !active}>
+                Stop ZeroBus stream
+              </Button>
+            </div>
           </div>
-          {!simulatorAvailable && (
+
+          {(!simulatorAvailable || !protocolRunning) && (
             <div className="muted" style={{ color: "var(--warning-text, #b26a00)" }}>
-              {protocol.toUpperCase()} simulator is not running in this app session. Enable it in
+              {protocol.toUpperCase()} simulator is not running. Use <strong>Start protocol</strong> above, or enable it in
               <code style={{ marginLeft: 4 }}>ot_simulator/config.yaml</code>
-              or start the simulator with <code style={{ marginLeft: 4 }}>{`--protocol ${protocol}`}</code>.
+              and restart.
             </div>
           )}
         </div>
