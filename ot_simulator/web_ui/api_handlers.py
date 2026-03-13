@@ -476,14 +476,29 @@ class APIHandlers:
                     # OPC-UA and MQTT: path -> sensor_sim
                     all_items = list(simulator.simulators.items())
 
-                # Apply sensor filtering if specific sensors were selected
+                # Apply sensor filtering if specific sensors were selected.
+                # If none of the saved selections match runtime sensor paths,
+                # fall back to all sensors to avoid "active but 0 events".
                 if selected_sensors and len(selected_sensors) > 0:
+                    selected_set = set(selected_sensors)
                     if protocol == "modbus":
-                        # Filter by path (second element of tuple)
-                        items = [(addr, data) for addr, data in all_items if data[0] in selected_sensors]
+                        # Modbus item: (register_address, (path, sensor_sim))
+                        items = [(addr, data) for addr, data in all_items if data[0] in selected_set]
                     else:
-                        # Filter by path (key)
-                        items = [(path, sim) for path, sim in all_items if path in selected_sensors]
+                        # OPC-UA / MQTT item: (path, sensor_sim)
+                        items = [(path, sim) for path, sim in all_items if path in selected_set]
+
+                    if not items:
+                        available_paths = (
+                            [data[0] for _, data in all_items] if protocol == "modbus" else [path for path, _ in all_items]
+                        )
+                        logger.warning(
+                            "%s: selected_sensors has no runtime matches (selected=%d, available=%d). Falling back to all sensors.",
+                            protocol.upper(),
+                            len(selected_set),
+                            len(available_paths),
+                        )
+                        items = all_items
                 else:
                     # No filter: use all sensors
                     items = all_items
@@ -914,14 +929,29 @@ class APIHandlers:
                     # OPC-UA and MQTT: path -> sensor_sim
                     all_items = list(simulator.simulators.items())
 
-                # Apply sensor filtering if specific sensors were selected
+                # Apply sensor filtering if specific sensors were selected.
+                # If none of the saved selections match runtime sensor paths,
+                # fall back to all sensors to avoid "active but 0 events".
                 if selected_sensors and len(selected_sensors) > 0:
+                    selected_set = set(selected_sensors)
                     if protocol == "modbus":
-                        # Filter by path (second element of tuple)
-                        items = [(addr, data) for addr, data in all_items if data[0] in selected_sensors]
+                        # Modbus item: (register_address, (path, sensor_sim))
+                        items = [(addr, data) for addr, data in all_items if data[0] in selected_set]
                     else:
-                        # Filter by path (key)
-                        items = [(path, sim) for path, sim in all_items if path in selected_sensors]
+                        # OPC-UA / MQTT item: (path, sensor_sim)
+                        items = [(path, sim) for path, sim in all_items if path in selected_set]
+
+                    if not items:
+                        available_paths = (
+                            [data[0] for _, data in all_items] if protocol == "modbus" else [path for path, _ in all_items]
+                        )
+                        logger.warning(
+                            "%s: selected_sensors has no runtime matches (selected=%d, available=%d). Falling back to all sensors.",
+                            protocol.upper(),
+                            len(selected_set),
+                            len(available_paths),
+                        )
+                        items = all_items
                 else:
                     # No filter: use all sensors
                     items = all_items
@@ -1476,14 +1506,29 @@ class APIHandlers:
                     # OPC-UA and MQTT: path -> sensor_sim
                     all_items = list(simulator.simulators.items())
 
-                # Apply sensor filtering if specific sensors were selected
+                # Apply sensor filtering if specific sensors were selected.
+                # If none of the saved selections match runtime sensor paths,
+                # fall back to all sensors to avoid "active but 0 events".
                 if selected_sensors and len(selected_sensors) > 0:
+                    selected_set = set(selected_sensors)
                     if protocol == "modbus":
-                        # Filter by path (second element of tuple)
-                        items = [(addr, data) for addr, data in all_items if data[0] in selected_sensors]
+                        # Modbus item: (register_address, (path, sensor_sim))
+                        items = [(addr, data) for addr, data in all_items if data[0] in selected_set]
                     else:
-                        # Filter by path (key)
-                        items = [(path, sim) for path, sim in all_items if path in selected_sensors]
+                        # OPC-UA / MQTT item: (path, sensor_sim)
+                        items = [(path, sim) for path, sim in all_items if path in selected_set]
+
+                    if not items:
+                        available_paths = (
+                            [data[0] for _, data in all_items] if protocol == "modbus" else [path for path, _ in all_items]
+                        )
+                        logger.warning(
+                            "%s: selected_sensors has no runtime matches (selected=%d, available=%d). Falling back to all sensors.",
+                            protocol.upper(),
+                            len(selected_set),
+                            len(available_paths),
+                        )
+                        items = all_items
                 else:
                     # No filter: use all sensors
                     items = all_items

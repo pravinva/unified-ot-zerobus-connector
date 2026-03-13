@@ -10,6 +10,7 @@ type SensorItem = {
   type: string;
   industryDisplay: string;
   plc: string;
+  protocols: string[];
 };
 
 export function ZeroBusPage() {
@@ -121,6 +122,7 @@ export function ZeroBusPage() {
           type: String((sensor as any).type ?? "unknown"),
           industryDisplay,
           plc,
+          protocols: Array.isArray((sensor as any).protocols) ? (sensor as any).protocols : [],
         });
       }
     }
@@ -137,11 +139,13 @@ export function ZeroBusPage() {
 
   const filteredSensors = useMemo(() => {
     return allSensors.filter((sensor) => {
+      // Only allow sensors available for the selected protocol.
+      if (!sensor.protocols.includes(protocol)) return false;
       if (industryFilters.size > 0 && !industryFilters.has(sensor.industryDisplay)) return false;
       if (plcFilters.size > 0 && !plcFilters.has(sensor.plc)) return false;
       return true;
     });
-  }, [allSensors, industryFilters, plcFilters]);
+  }, [allSensors, industryFilters, plcFilters, protocol]);
 
   const toggleIndustryFilter = useCallback((industry: string, checked: boolean) => {
     setIndustryFilters((prev) => {
