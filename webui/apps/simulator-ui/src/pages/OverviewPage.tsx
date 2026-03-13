@@ -51,18 +51,27 @@ export function OverviewPage() {
 
       setPendingProtocolAction((prev) => ({ ...prev, [protocol]: action }));
       toast.show(`${action === "start" ? "Start" : "Stop"} requested for ${protocol.toUpperCase()}`, "ok");
-      // Force immediate status refresh attempts so UI reflects action quickly.
+      // Force immediate and short-lived follow-up status refresh attempts.
       ws.getStatus();
-      window.setTimeout(() => ws.getStatus(), 400);
-      window.setTimeout(() => ws.getStatus(), 1200);
+      window.setTimeout(() => ws.getStatus(), 250);
+      window.setTimeout(() => ws.getStatus(), 800);
+      window.setTimeout(() => ws.getStatus(), 1500);
+      window.setTimeout(() => ws.getStatus(), 3000);
+      window.setTimeout(() => ws.getStatus(), 5000);
       window.setTimeout(() => {
         setPendingProtocolAction((prev) => {
           if (prev[protocol] !== action) return prev;
+          toast.show(
+            `${protocol.toUpperCase()} is still ${
+              action === "start" ? "starting" : "stopping"
+            }. Check protocol logs if this persists.`,
+            "warn"
+          );
           const next = { ...prev };
           delete next[protocol];
           return next;
         });
-      }, 3000);
+      }, 8000);
     },
     [toast, ws]
   );
@@ -115,12 +124,14 @@ export function OverviewPage() {
           const row = simRow(p);
           const running = Boolean(row?.running);
           const pending = pendingProtocolAction[p];
+          const stateLabel = pending === "start" ? "starting" : pending === "stop" ? "stopping" : running ? "running" : "stopped";
+          const stateKind = pending ? "warn" : running ? "ok" : "warn";
           return (
             <div key={p} style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "8px 0" }}>
               <div style={{ minWidth: 120, fontFamily: "var(--font-data)" }}>
                 <strong>{p.toUpperCase()}</strong>
               </div>
-              <StatusPill kind={running ? "ok" : "warn"}>{running ? "running" : "stopped"}</StatusPill>
+              <StatusPill kind={stateKind}>{stateLabel}</StatusPill>
               <span className="muted">sensors: {String(row?.sensor_count ?? "—")}</span>
               <span className="muted">updates: {String(row?.update_count ?? "—")}</span>
               <span className="muted">errors: {String(row?.errors ?? "—")}</span>
