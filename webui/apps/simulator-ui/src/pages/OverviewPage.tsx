@@ -99,18 +99,27 @@ export function OverviewPage() {
     const protocol = msg.protocol as "opcua" | "mqtt" | "modbus";
     if (!["opcua", "mqtt", "modbus"].includes(protocol)) return;
 
-    setPendingProtocolAction((prev) => {
-      if (!prev[protocol]) return prev;
-      const next = { ...prev };
-      delete next[protocol];
-      return next;
-    });
+    if (!msg.success) {
+      setPendingProtocolAction((prev) => {
+        if (!prev[protocol]) return prev;
+        const next = { ...prev };
+        delete next[protocol];
+        return next;
+      });
+      toast.show(
+        msg.message || `${protocol.toUpperCase()} ${msg.action === "start" ? "start" : "stop"} failed`,
+        "bad"
+      );
+      ws.getStatus();
+      return;
+    }
 
+    // Success ACK only means command was accepted.
+    // Keep pending state until status_update confirms the running flag changed.
     toast.show(
-      msg.message || `${protocol.toUpperCase()} ${msg.action === "start" ? "start" : "stop"} ${msg.success ? "ok" : "failed"}`,
-      msg.success ? "ok" : "bad"
+      msg.message || `${protocol.toUpperCase()} ${msg.action === "start" ? "start" : "stop"} requested`,
+      "ok"
     );
-    ws.getStatus();
   }, [toast, ws, ws.lastMessage]);
 
   return (
