@@ -243,6 +243,7 @@ export function ZeroBusPage() {
 
   const hasConfig = Boolean((status as any)?.status?.[protocol]?.has_config);
   const active = Boolean((status as any)?.status?.[protocol]?.active);
+  const simulatorAvailable = Boolean((status as any)?.status?.[protocol]?.simulator_available);
 
   return (
     <div style={{ display: "grid", gap: 16 }}>
@@ -263,7 +264,7 @@ export function ZeroBusPage() {
             <Button type="button" onClick={() => test()} disabled={actionLoading}>
               Test
             </Button>
-            <Button variant="primary" type="button" onClick={() => start()} disabled={actionLoading || !hasConfig}>
+            <Button variant="primary" type="button" onClick={() => start()} disabled={actionLoading || !hasConfig || !simulatorAvailable}>
               Start streaming
             </Button>
             <Button variant="danger" type="button" onClick={() => stop()} disabled={actionLoading || !active}>
@@ -408,6 +409,13 @@ export function ZeroBusPage() {
           <div className="muted">
             Status: {active ? "streaming active" : "inactive"}; saved config: {hasConfig ? "yes" : "no"}
           </div>
+          {!simulatorAvailable && (
+            <div className="muted" style={{ color: "var(--warning-text, #b26a00)" }}>
+              {protocol.toUpperCase()} simulator is not running in this app session. Enable it in
+              <code style={{ marginLeft: 4 }}>ot_simulator/config.yaml</code>
+              or start the simulator with <code style={{ marginLeft: 4 }}>{`--protocol ${protocol}`}</code>.
+            </div>
+          )}
         </div>
       </Panel>
 

@@ -22,7 +22,7 @@ export type ZeroBusConfigLoadResponse =
   | { success: false; message: string; detail?: string };
 
 export type ZeroBusStatusResponse =
-  | { success: true; status: Record<string, { active: boolean; has_config: boolean }> }
+  | { success: true; status: Record<string, { active: boolean; has_config: boolean; simulator_available?: boolean }> }
   | { success: false; message: string; detail?: string };
 
 export type OpcuaNode = {

@@ -281,6 +281,19 @@ class APIHandlers:
                     "message": "Invalid configuration: missing workspace_host or zerobus_endpoint"
                 })
 
+            # The stream worker requires the protocol simulator to be running.
+            # If it's disabled in config, return a clear error instead of briefly
+            # toggling active->inactive and appearing "broken" in the UI.
+            simulator = self.manager.simulators.get(protocol)
+            if not simulator:
+                return web.json_response({
+                    "success": False,
+                    "message": (
+                        f"{protocol.upper()} simulator is not running. "
+                        f"Enable {protocol} in ot_simulator/config.yaml or start with --protocol {protocol}."
+                    )
+                })
+
             # Start streaming task
             task = asyncio.create_task(self._stream_to_zerobus(protocol, config))
             self.streaming_tasks[protocol] = task
@@ -350,9 +363,11 @@ class APIHandlers:
             status = {}
             for protocol in ["opcua", "mqtt", "modbus"]:
                 active = self.streaming_active.get(protocol, False)
+                simulator_available = self.manager.simulators.get(protocol) is not None
                 status[protocol] = {
                     "active": active,
-                    "has_config": self.credential_manager.load_config(protocol) is not None
+                    "has_config": self.credential_manager.load_config(protocol) is not None,
+                    "simulator_available": simulator_available,
                 }
 
             return web.json_response({
@@ -706,6 +721,17 @@ class APIHandlers:
                     "message": "Invalid configuration: missing workspace_host or zerobus_endpoint"
                 })
 
+            # The stream worker requires the protocol simulator to exist.
+            simulator = self.manager.simulators.get(protocol)
+            if not simulator:
+                return web.json_response({
+                    "success": False,
+                    "message": (
+                        f"{protocol.upper()} simulator is not running. "
+                        f"Enable {protocol} in ot_simulator/config.yaml or start with --protocol {protocol}."
+                    )
+                })
+
             # Start streaming task
             task = asyncio.create_task(self._stream_to_zerobus(protocol, config))
             self.streaming_tasks[protocol] = task
@@ -775,9 +801,11 @@ class APIHandlers:
             status = {}
             for protocol in ["opcua", "mqtt", "modbus"]:
                 active = self.streaming_active.get(protocol, False)
+                simulator_available = self.manager.simulators.get(protocol) is not None
                 status[protocol] = {
                     "active": active,
-                    "has_config": self.credential_manager.load_config(protocol) is not None
+                    "has_config": self.credential_manager.load_config(protocol) is not None,
+                    "simulator_available": simulator_available,
                 }
 
             return web.json_response({
@@ -1255,6 +1283,17 @@ class APIHandlers:
                     "message": "Invalid configuration: missing workspace_host or zerobus_endpoint"
                 })
 
+            # The stream worker requires the protocol simulator to exist.
+            simulator = self.manager.simulators.get(protocol)
+            if not simulator:
+                return web.json_response({
+                    "success": False,
+                    "message": (
+                        f"{protocol.upper()} simulator is not running. "
+                        f"Enable {protocol} in ot_simulator/config.yaml or start with --protocol {protocol}."
+                    )
+                })
+
             # Start streaming task
             task = asyncio.create_task(self._stream_to_zerobus(protocol, config))
             self.streaming_tasks[protocol] = task
@@ -1324,9 +1363,11 @@ class APIHandlers:
             status = {}
             for protocol in ["opcua", "mqtt", "modbus"]:
                 active = self.streaming_active.get(protocol, False)
+                simulator_available = self.manager.simulators.get(protocol) is not None
                 status[protocol] = {
                     "active": active,
-                    "has_config": self.credential_manager.load_config(protocol) is not None
+                    "has_config": self.credential_manager.load_config(protocol) is not None,
+                    "simulator_available": simulator_available,
                 }
 
             return web.json_response({
